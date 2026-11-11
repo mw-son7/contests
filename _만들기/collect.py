@@ -28,6 +28,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 OUT = os.path.join(ROOT, "공모전모음.html")
 TEMPLATE = os.path.join(HERE, "틀.html")
+OUT_M = os.path.join(ROOT, "공모전모음_모바일.html")          # 휴대폰용 화면(웹에서는 /m/ 주소)
+TEMPLATE_M = os.path.join(HERE, "틀_모바일.html")
 STATE = os.path.join(HERE, "_기록.json")
 LOG = os.path.join(HERE, "_로그.txt")
 
@@ -868,16 +870,23 @@ def main(argv):
         f" · 어림 {sum(1 for x in items if x.get('dr'))}건 · 모름 {sum(1 for x in items if not x.get('d'))}건"
         f" / 대상 정보 없음 {sum(1 for x in items if not x['w'])}건")
     data = {"generated": now, "sources": report, "fields": [n for n, _ in FIELDS] + ["기타"], "items": items}
-    with open(TEMPLATE, encoding="utf-8") as f:
-        tpl = f.read()
-    if "/*__DATA__*/null" not in tpl:
-        raise RuntimeError("틀.html 에 자료를 끼울 자리(/*__DATA__*/null)가 없음")
-    # 판 번호 = 받은 때 + 화면 틀의 지문. 웹에서는 version.txt 로도 내보내, 브라우저가 옛 화면을 붙들고 있으면
+    pages = []                                  # (화면 틀, 결과물) — PC 화면과 휴대폰 화면
+    for tpl_path, out_path in ((TEMPLATE, OUT), (TEMPLATE_M, OUT_M)):
+        if not os.path.exists(tpl_path):
+            continue
+        with open(tpl_path, encoding="utf-8") as f:
+            tpl = f.read()
+        if "/*__DATA__*/null" not in tpl:
+            raise RuntimeError(f"{os.path.basename(tpl_path)} 에 자료를 끼울 자리(/*__DATA__*/null)가 없음")
+        pages.append((tpl, out_path))
+    # 판 번호 = 받은 때 + 화면 틀들의 지문. 웹에서는 version.txt 로도 내보내, 브라우저가 옛 화면을 붙들고 있으면
     # 화면이 스스로 알아채고 새로 불러오게 한다.
-    data["build"] = re.sub(r"\D", "", now) + "-" + hashlib.sha1(tpl.encode("utf-8")).hexdigest()[:8]
+    mark = hashlib.sha1("".join(tpl for tpl, _ in pages).encode("utf-8")).hexdigest()[:8]
+    data["build"] = re.sub(r"\D", "", now) + "-" + mark
     write_synced(os.path.join(ROOT, "version.txt"), data["build"] + "\n")
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
-    write_synced(OUT, tpl.replace("/*__DATA__*/null", payload))
+    for tpl, out_path in pages:
+        write_synced(out_path, tpl.replace("/*__DATA__*/null", payload))
     if ok_count == len(SOURCES):          # 여섯 곳을 다 받았을 때만, 목록에서 사라진 공모전의 주소 기록을 지운다
         live = {u for rows in rows_by_src.values() for u in (r["url"] for r in rows)}
         homes = {k: v for k, v in homes.items() if k in live}
