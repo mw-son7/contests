@@ -104,12 +104,35 @@ def end_from_dday(text):
     return None
 
 
+AGGREGATOR = re.compile(r"wevity\.com|linkareer\.com|contestkorea\.com|thinkcontest\.com", re.I)
+
+
+def host_url(u):
+    """주최 측 사이트 주소를 다듬는다. 주소 꼴이 아니거나 모음 사이트 자신을 가리키면 빈 글."""
+    u = html.unescape((u or "").strip())
+    if not u or len(u) > 600 or re.search(r"\s", u):
+        return ""
+    if not re.match(r"https?://", u, re.I):
+        if not re.match(r"[\w-]+(\.[\w-]+)+(/|$)", u):
+            return ""
+        u = "http://" + u
+    try:
+        if AGGREGATOR.search(urllib.parse.urlsplit(u).netloc):
+            return ""
+    except ValueError:
+        return ""
+    return u
+
+
 def item(src, title, url, host="", cats="", target="", start=None, end=None,
-         posted=None, note="", horg="", num=None):
+         posted=None, note="", horg="", num=None, home=""):
     """한 건. target=응모 대상(사이트 표기 그대로), note=자격 덧말, horg=주최 분류, posted=사이트에 올라온 날,
-    num=사이트 안 일련번호(올라온 날을 모를 때 이웃 번호로 어림하는 데 쓴다)."""
+    num=사이트 안 일련번호(올라온 날을 모를 때 이웃 번호로 어림하는 데 쓴다), home=주최 측 사이트 주소."""
     d = {"src": src, "title": clean(title), "url": url, "host": clean(host),
          "cats": clean(cats), "target": clean(target), "start": iso(start), "end": iso(end)}
+    home = host_url(home)
+    if home:
+        d["home"] = home
     if posted:
         d["posted"] = iso(posted)
     if note:
@@ -192,6 +215,7 @@ def thinkcontest():
                                 target=x.get("enter_qualified_nm"),
                                 start=parse_date(x.get("accept_dt")), end=parse_date(x.get("finish_dt")),
                                 posted=parse_date(x.get("putup_sdt")), horg=x.get("host_organ_nm"),
+                                home=x.get("hompage_url"),
                                 note=" / ".join(v.strip() for v in (x.get("enter_qualified_limit"),
                                                                      x.get("enter_qualified_etc"))
                                                 if v and v.strip())))
@@ -278,8 +302,9 @@ def korea():
         if not CONTEST_WORD.search(title):
             continue
         host = re.match(r"\s*\[([^\]]+)\]\s*", title)
-        out.append(item("정책브리핑", title[host.end():] if host else title,
-                        urllib.parse.urljoin("https://www.korea.kr/", html.unescape(m.group(1))),
+        link = urllib.parse.urljoin("https://www.korea.kr/", html.unescape(m.group(1)))
+        out.append(item("정책브리핑", title[host.end():] if host else title, link,
+                        home="" if "korea.kr" in link else link,      # 이 목록의 링크는 주최 측 사이트로 곧바로 간다
                         host=host.group(1) if host else "",
                         start=parse_date(m.group(3)), end=parse_date(m.group(4))))
     return out
@@ -598,6 +623,54 @@ def run_source(entry):
         return name, None, f"{type(e).__name__}: {e}", time.time() - t0
 
 
+# ───────────────────────── 주최 측 사이트 주소 ─────────────────────────
+# 씽굿은 목록에 주소가 실려 오고, 정책브리핑은 링크가 곧 주최 측 사이트다.
+# 위비티·링커리어·콘테스트코리아는 공모전 상세 화면의 '홈페이지' 칸에 있다. 한 번 열어 본 것은
+# _기록.json 에 적어 두고 다시 열지 않으므로, 날마다 새로 올라온 것만 열어 보게 된다.
+
+DETAIL_ORDER = ("위비티", "링커리어", "콘테스트코리아")
+HOME_CAP = 200          # 한 번 실행에 사이트마다 열어 볼 상세 화면 수의 한도(처음 채울 때 한꺼번에 몰리지 않게)
+
+
+def home_from_detail(src, url, session):
+    t = session.text(url)
+    if src == "위비티":
+        m = re.search(r'<span class="tit">홈페이지</span>\s*<a href="([^"]+)"', t)
+        return host_url(m.group(1)) if m else ""
+    if src == "링커리어":
+        m = re.search(r'"homepageURL":("(?:[^"\\]|\\.)*")', t)
+        return host_url(json.loads(m.group(1))) if m else ""
+    m = re.search(r'<a href="([^"]+)"[^>]*class="homepage_go"', t)
+    return host_url(m.group(1)) if m else ""
+
+
+def fetch_homes(todo, cache):
+    """todo = [(사이트, 상세 화면 주소)…]. 사이트마다 차례로(사이트끼리는 나란히) 열어 cache 에 적는다."""
+    by_src = {}
+    for src, url in todo:
+        by_src.setdefault(src, []).append(url)
+
+    def work(src):
+        s, out, bad = Session(), {}, 0
+        for url in by_src[src][:HOME_CAP]:
+            try:
+                out[url] = home_from_detail(src, url, s)
+                bad = 0
+            except Exception:
+                bad += 1                       # 못 연 것은 적지 않는다 — 다음 실행 때 다시 해 본다
+                if bad >= 5:
+                    break                      # 잇달아 막히면 그 사이트는 이번엔 그만둔다
+        return out
+
+    done = 0
+    if by_src:
+        with cf.ThreadPoolExecutor(max_workers=len(by_src)) as pool:
+            for res in pool.map(work, list(by_src)):
+                cache.update(res)
+                done += len(res)
+    return done
+
+
 def guess_posted(nums, table):
     """올라온 날을 알려 주지 않는 사이트(위비티·링커리어)는 일련번호가 가까운 이웃들의 날짜로 어림한다.
     table = {사이트: [(일련번호, 날짜 서수), …]} — 다른 사이트에도 올라와 날짜를 아는 것들."""
@@ -611,8 +684,9 @@ def guess_posted(nums, table):
     return None
 
 
-def merge(rows_by_src, first_seen, first_run):
-    merged, order = {}, []
+def merge(rows_by_src, first_seen, first_run, homes):
+    """homes = {상세 화면 주소: 주최 측 주소 또는 빈 글}. 돌려주는 todo 는 아직 열어 보지 않은 상세 화면들."""
+    merged, order, todo = {}, [], []
     for name, _, _ in SOURCES:
         for r in rows_by_src.get(name, []):
             end = r.get("end")
@@ -624,7 +698,7 @@ def merge(rows_by_src, first_seen, first_run):
             m = merged.get(key)
             if m is None:
                 m = {"t": r["title"], "s": None, "e": None, "l": [], "hosts": [], "cats": [], "who": [],
-                     "notes": [], "horgs": [], "posted": [], "nums": {}}
+                     "notes": [], "horgs": [], "posted": [], "nums": {}, "home": ""}
                 merged[key] = m
                 order.append(key)
             m["s"] = m["s"] or r.get("start")          # 겹치는 공모전 — 비어 있는 칸만 채운다
@@ -635,6 +709,7 @@ def merge(rows_by_src, first_seen, first_run):
                     m[box].append(r[field])
             if r.get("num"):
                 m["nums"].setdefault(name, r["num"])
+            m["home"] = m["home"] or r.get("home", "")
             if not any(src == name for src, _ in m["l"]):
                 m["l"].append([name, r["url"]])
 
@@ -658,6 +733,22 @@ def merge(rows_by_src, first_seen, first_run):
         row = {"t": title, "h": host, "f": fields_of(", ".join(m["cats"]), title), "s": m["s"], "e": m["e"],
                "l": m["l"], "p": 1 if is_public(srcs, m["horgs"], m["hosts"]) else 0,
                "w": who_tokens(target, title)}
+
+        # 주최 측 사이트 주소: 목록에 실려 온 것 → 열어 본 상세 화면에서 찾은 것. 없으면 다음에 열어 볼 것으로 적는다
+        home = m["home"]
+        if not home:
+            for src in DETAIL_ORDER:
+                url = next((u for s2, u in m["l"] if s2 == src), None)
+                if not url:
+                    continue
+                if url not in homes:
+                    todo.append((src, url))
+                    break
+                if homes[url]:
+                    home = homes[url]
+                    break
+        if home:
+            row["u"] = home
 
         # 올라온 날: 사이트가 알려 준 날 → 이 도구가 처음 본 날 → 이웃 번호로 어림 → 접수 시작일
         posted, rough = (parse_date(min(m["posted"])) if m["posted"] else None), False
@@ -689,7 +780,7 @@ def merge(rows_by_src, first_seen, first_run):
         if q:
             row["q"] = q
         items.append(row)
-    return items, seen_now
+    return items, seen_now, todo
 
 
 def write_synced(path, text):
@@ -764,7 +855,14 @@ def main(argv):
                           "count": len(rows_by_src[name])}
         report.append(done[name])
 
-    items, seen_now = merge(rows_by_src, state.get("first_seen", {}), first_run)
+    homes = state.get("home", {})
+    items, seen_now, todo = merge(rows_by_src, state.get("first_seen", {}), first_run, homes)
+    if todo and not render_only and "--no-detail" not in argv:
+        t0 = time.time()
+        got = fetch_homes(todo, homes)
+        items, seen_now, left = merge(rows_by_src, state.get("first_seen", {}), first_run, homes)
+        log(f"  주최 측 주소: 상세 화면 {got}건을 열어 봄 ({time.time() - t0:.0f}초) · 아직 안 열어 본 것 {len(left)}건")
+    log(f"  주최 측 주소를 아는 것 {sum(1 for x in items if x.get('u'))}건 / 모르는 것 {sum(1 for x in items if not x.get('u'))}건")
     pub = sum(1 for x in items if x["p"])
     log(f"  공공 {pub}건 · 민간 {len(items) - pub}건 / 올라온 날: 확인 {sum(1 for x in items if x.get('d') and not x.get('dr'))}건"
         f" · 어림 {sum(1 for x in items if x.get('dr'))}건 · 모름 {sum(1 for x in items if not x.get('d'))}건"
@@ -776,7 +874,10 @@ def main(argv):
         raise RuntimeError("틀.html 에 자료를 끼울 자리(/*__DATA__*/null)가 없음")
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
     write_synced(OUT, tpl.replace("/*__DATA__*/null", payload))
-    write_synced(STATE, json.dumps({"last_run": now, "first_seen": seen_now, "sources": cache},
+    if ok_count == len(SOURCES):          # 여섯 곳을 다 받았을 때만, 목록에서 사라진 공모전의 주소 기록을 지운다
+        live = {u for rows in rows_by_src.values() for u in (r["url"] for r in rows)}
+        homes = {k: v for k, v in homes.items() if k in live}
+    write_synced(STATE, json.dumps({"last_run": now, "first_seen": seen_now, "home": homes, "sources": cache},
                                    ensure_ascii=False, separators=(",", ":")))
     log(f"완료 — 겹친 것을 합쳐 {len(items)}건, {os.path.basename(OUT)} 갱신")
     return 0
