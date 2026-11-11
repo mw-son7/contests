@@ -48,14 +48,15 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .seg a[aria-current="page"] { background: var(--canvas); color: var(--ink); font-weight: 600; }
 #stamp { margin-left: auto; font-size: 14px; color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* ── 첫 화면: 표찰 → 큰 제목 → 타일 둘 ── */
+/* ── 첫 화면: 표찰 → 큰 제목 → 타일 셋(전체·공공·민간) ── */
 #home { flex: 1 1 auto; display: flex; align-items: center; background: var(--parchment); padding: 48px 24px; }
 .eyebrow { font-size: 14px; font-weight: 600; color: var(--blue); margin: 0 0 12px; }
 .eyebrow.line { display: flex; align-items: center; gap: 12px; }
 .eyebrow.line::before { content: ""; width: 28px; height: 1px; background: currentColor; }
 .hero-title { font-size: 60px; letter-spacing: -.03em; margin-bottom: 16px; }
 .lead { font-size: 19px; font-weight: 300; color: var(--ink-muted); max-width: 760px; }
-.tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; margin-top: 40px; }
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 40px; }
+@media (max-width: 1040px) { .tiles { grid-template-columns: 1fr; } .tiles .tile { min-height: 0; } .tiles .tile .no { margin-bottom: 16px; } }
 .tile { display: flex; flex-direction: column; justify-content: flex-end; min-height: 336px; padding: 32px;
   background: var(--canvas); border: 1px solid var(--hairline); border-radius: var(--r-lg); color: var(--ink);
   transition: transform var(--dur) var(--ease-out), border-color var(--dur) var(--ease); }
@@ -75,6 +76,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 #home .lead { animation-delay: .1s; }
 #home .tile:nth-child(1) { animation-delay: .2s; }
 #home .tile:nth-child(2) { animation-delay: .28s; }
+#home .tile:nth-child(3) { animation-delay: .36s; }
 
 footer { flex: 0 0 auto; display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; padding: 20px 24px;
   border-top: 1px solid var(--hairline); background: var(--parchment); font-size: 13px; color: var(--ink-muted); }
@@ -194,7 +196,8 @@ tr.no td.name a.title, tr.no td.host { color: var(--ink-48); }
 <body>
 <header class="topbar">
   <a class="brand" href="#">공모전 모음</a>
-  <nav class="seg" id="seg" aria-label="공공·민간 바꾸기" hidden>
+  <nav class="seg" id="seg" aria-label="전체·공공·민간 바꾸기" hidden>
+    <a href="#all" id="seg-all">전체</a>
     <a href="#public" id="seg-public">공공</a>
     <a href="#private" id="seg-private">민간</a>
   </nav>
@@ -206,7 +209,7 @@ tr.no td.name a.title, tr.no td.host { color: var(--ink-48); }
   <div class="wrap">
     <p class="eyebrow line">매일 아침 새로 받는</p>
     <h1 class="hero-title">공모전 모음</h1>
-    <p class="lead" id="home-lead">여섯 사이트에 올라온 공모전을 한데 모았습니다. 여는 곳이 공공인지 민간인지에 따라 둘로 나누었습니다.</p>
+    <p class="lead" id="home-lead">여섯 사이트에 올라온 공모전을 한데 모았습니다. 전체를 한꺼번에 보거나, 여는 곳이 공공인지 민간인지에 따라 나누어 볼 수 있습니다.</p>
     <div id="home-alerts"></div>
     <div class="tiles" id="tiles"></div>
   </div>
@@ -335,9 +338,12 @@ var DATA = /*__DATA__*/null;
   var JOBS = { worker: ['일반인'], univ: ['대학생'], grad: ['대학원생'], high: ['고등', '청소년'], mid: ['중등', '청소년'], elem: ['초등', '어린이'] };
   var WHO_LABEL = { '초등': '초등학생', '중등': '중학생', '고등': '고등학생' };
   var GROUPS = {
-    'public':  { no: '01', name: '공공 공모전', cap: '중앙부처 · 지방자치단체 · 공공기관이 여는' },
-    'private': { no: '02', name: '민간 공모전', cap: '기업 · 언론 · 협회 · 학교가 여는' }
+    'all':     { no: '01', name: '전체 공모전', cap: '공공과 민간을 가리지 않고 모두' },
+    'public':  { no: '02', name: '공공 공모전', cap: '중앙부처 · 지방자치단체 · 공공기관이 여는' },
+    'private': { no: '03', name: '민간 공모전', cap: '기업 · 언론 · 협회 · 학교가 여는' }
   };
+  var ORDER = ['all', 'public', 'private'];
+  function inGroup(x, g) { return g === 'all' || x.pub === (g === 'public'); }
   var today = new Date(); today.setHours(0, 0, 0, 0);
 
   function el(tag, cls, text) {
@@ -472,8 +478,8 @@ var DATA = /*__DATA__*/null;
   function soon(x) { return x.left != null && x.left <= 7 && !x.yet; }
 
   // ── 첫 화면 타일 ──
-  ['public', 'private'].forEach(function (g) {
-    var list = ALL.filter(function (x) { return x.pub === (g === 'public'); });
+  ORDER.forEach(function (g) {
+    var list = ALL.filter(function (x) { return inGroup(x, g); });
     var a = el('a', 'tile'); a.href = '#' + g;
     a.appendChild(el('span', 'no', GROUPS[g].no));
     var val = el('span', 'val', num(list.length)); val.appendChild(el('span', 'unit', '건'));
@@ -693,7 +699,7 @@ var DATA = /*__DATA__*/null;
   });
   $('history').textContent = '마지막 갱신 ' + DATA.generated + ' · 매일 아침 7시 무렵에 자동으로 새로 받습니다.';
 
-  // ── 화면 바꾸기: 주소 끝이 #public · #private 이면 목록, 아니면 첫 화면 ──
+  // ── 화면 바꾸기: 주소 끝이 #all · #public · #private 이면 목록, 아니면 첫 화면 ──
   function route() {
     var g = location.hash.replace('#', '');
     if (!GROUPS[g]) {
@@ -703,9 +709,9 @@ var DATA = /*__DATA__*/null;
       return;
     }
     group = g;
-    items = ALL.filter(function (x) { return x.pub === (g === 'public'); });
+    items = ALL.filter(function (x) { return inGroup(x, g); });
     $('home').hidden = true; $('list').hidden = false; $('seg').hidden = false;
-    ['public', 'private'].forEach(function (k) {
+    ORDER.forEach(function (k) {
       if (k === g) $('seg-' + k).setAttribute('aria-current', 'page'); else $('seg-' + k).removeAttribute('aria-current');
     });
     $('l-eyebrow').textContent = GROUPS[g].cap;
