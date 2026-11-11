@@ -95,21 +95,33 @@ section { padding: 48px 24px; }
 .note.info { border-left-color: var(--info); background: var(--info-bg); }
 #home .note { margin-top: 24px; max-width: 760px; }
 
-.finder { padding-bottom: 16px; }
-.search-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+/* ── 왼쪽 필터 판 + 오른쪽 목록 ── */
+.wrap.wide { max-width: 1440px; }
+.work { padding-top: 32px; }
+.board { display: grid; grid-template-columns: 296px minmax(0, 1fr); gap: 32px; align-items: start; }
+.filter { position: sticky; top: 68px; max-height: calc(100vh - 84px); overflow-y: auto; background: var(--canvas);
+  border: 1px solid var(--hairline); border-radius: var(--r-lg); }
+.filter-head { display: flex; align-items: center; gap: 16px; padding: 16px 24px; background: var(--parchment); border-bottom: 1px solid var(--hairline); }
+.filter-head h2 { font-size: 19px; margin: 0 auto 0 0; }
+#filter-toggle { display: none; }
+.fsec { padding: 16px 24px; border-bottom: 1px solid var(--divider-soft); }
+.fsec:last-child { border-bottom: 0; }
+.fsec-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.fsec-head h3 { font-size: 15px; margin: 0; }
+.fsec-head .linkbtn { font-size: 14px; white-space: nowrap; }
+.opt { display: flex; align-items: center; gap: 8px; padding: 5px 0; font-size: 15px; cursor: pointer; }
+.opt-name { flex: 1 1 auto; min-width: 0; }
+.opt-count { flex: 0 0 auto; font-size: 13px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.opt.off { color: var(--ink-48); cursor: default; }
+.opt:hover .opt-name { color: var(--blue); }
+.opt.off:hover .opt-name { color: inherit; }
+
+.search-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
 input, select { height: 48px; border: 1px solid var(--ink-48); border-radius: var(--r-sm); padding: 0 16px; font: inherit; color: var(--ink); background: var(--canvas); }
+input[type="checkbox"], input[type="radio"] { width: 18px; height: 18px; flex: 0 0 auto; margin: 0; padding: 0; border: 0; accent-color: var(--blue); cursor: pointer; }
+input:disabled { cursor: default; }
 .search-row input { flex: 1 1 320px; min-width: 0; }
-.group { display: grid; grid-template-columns: 88px 1fr; gap: 8px 16px; align-items: start; margin-bottom: 16px; }
-.group > span { font-size: 15px; font-weight: 600; padding-top: 6px; }
-.chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .chip { display: inline-block; padding: 4px 12px; border-radius: var(--r-pill); background: var(--parchment); color: var(--ink-80); font-size: 13px; line-height: 1.5; white-space: nowrap; }
-button.chip { border: 1px solid transparent; font-family: inherit; font-size: 14px; padding: 6px 14px; cursor: pointer; transition: transform var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease); }
-button.chip:hover { border-color: rgba(0,0,0,.16); }
-button.chip:active { transform: scale(.95); }
-button.chip[aria-pressed="true"] { background: rgba(0,102,204,.1); color: var(--blue); border-color: var(--blue); font-weight: 600; }
-button.chip[aria-pressed="true"]::before { content: "✓ "; }
-button.chip:disabled { opacity: .5; cursor: default; }
-button.chip small { font-size: 12px; color: var(--ink-muted); font-weight: 400; margin-left: 4px; }
 .chip.danger  { color: var(--danger);  background: var(--danger-bg); }
 .chip.warning { color: var(--warning); background: var(--warning-bg); }
 .chip.info    { color: var(--info);    background: var(--info-bg); }
@@ -118,15 +130,11 @@ button.chip small { font-size: 12px; color: var(--ink-muted); font-weight: 400; 
 .linkbtn:hover { text-decoration: underline; }
 
 /* 내 조건 */
-.me { border: 1px solid var(--hairline); border-radius: var(--r-lg); padding: 24px; margin: 0 0 24px 104px; }
-.me h3 { margin-bottom: 4px; }
-.me p { font-size: 15px; color: var(--ink-muted); margin-bottom: 16px; }
-.me-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; align-items: end; }
-.me-grid label { display: block; font-size: 14px; font-weight: 600; }
-.me-grid label > input, .me-grid label > select { display: block; width: 100%; margin-top: 6px; font-weight: 400; }
-.me-grid .check { display: flex; align-items: center; gap: 8px; height: 48px; font-weight: 400; font-size: 15px; }
-.me-grid .check input { width: 20px; height: 20px; padding: 0; }
-.me-actions { display: flex; gap: 16px; align-items: center; margin-top: 16px; }
+.me { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--divider-soft); }
+.me p { font-size: 13px; color: var(--ink-muted); margin-bottom: 12px; }
+.me > label:not(.opt) { display: block; font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+.me > label:not(.opt) > input, .me > label:not(.opt) > select { display: block; width: 100%; height: 40px; padding: 0 12px; margin-top: 4px; font-size: 15px; font-weight: 400; }
+.me-actions { display: flex; gap: 16px; align-items: center; margin-top: 12px; }
 .btn { display: inline-block; min-height: 48px; padding: 11px 28px; border-radius: var(--r-pill); background: var(--blue); color: #fff; font: inherit; border: 0; cursor: pointer;
   transition: transform var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease); }
 .btn:hover { background: var(--blue-focus); }
@@ -134,7 +142,6 @@ button.chip small { font-size: 12px; color: var(--ink-muted); font-weight: 400; 
 .btn.ghost { background: transparent; color: var(--blue); border: 1px solid var(--blue); min-height: 40px; padding: 7px 22px; font-size: 15px; }
 .btn.ghost:hover { background: rgba(0,102,204,.06); }
 
-.result { padding-top: 16px; }
 .countline { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; font-size: 15px; color: var(--ink-muted); }
 .countline b { color: var(--ink); font-weight: 600; }
 table { width: 100%; border-collapse: collapse; font-size: 15px; border-top: 1px solid var(--ink-48); border-bottom: 1px solid var(--ink-48); }
@@ -159,16 +166,24 @@ tr.no td.name a.title, tr.no td.host { color: var(--ink-48); }
 .about { background: var(--parchment); }
 .about table { background: var(--canvas); margin-bottom: 24px; }
 .about h3 { margin-top: 32px; }
+.about table, .about .note, .about ul { max-width: 1040px; }
 .about ul { margin: 0 0 16px; padding-left: 24px; font-size: 15px; color: var(--ink-80); }
 .about li { margin-bottom: 8px; }
 .history { font-size: 14px; color: var(--ink-muted); border-top: 1px solid var(--hairline); padding-top: 16px; margin: 24px 0 0; }
 
+/* 좁은 화면: 필터 판이 목록 위로 올라가고, 접어 두었다가 펼친다 */
+@media (max-width: 1040px) {
+  .board { grid-template-columns: 1fr; gap: 24px; }
+  .filter { position: static; max-height: none; }
+  #filter-toggle { display: inline; }
+  .filter:not(.open) .filter-body { display: none; }
+  .filter:not(.open) .filter-head { border-bottom: 0; }
+}
 @media (max-width: 767px) {
   h1 { font-size: 28px; } h2 { font-size: 24px; } .hero-title { font-size: 40px; }
   section { padding: 32px 16px; } .topbar { padding: 0 16px; gap: 12px; } #home { padding: 32px 16px; align-items: flex-start; }
   #stamp { display: none; }
   .tiles { grid-template-columns: 1fr; } .tile { min-height: 0; padding: 24px; } .tile .no { margin-bottom: 16px; } .tile .val { font-size: 56px; }
-  .group { grid-template-columns: 1fr; } .me { margin-left: 0; }
   #rows-table thead { display: none; }
   #rows-table, #rows-table tbody, #rows-table tr, #rows-table td { display: block; }
   #rows-table tr { padding: 16px 0; border-bottom: 1px solid var(--divider-soft); }
@@ -185,7 +200,8 @@ tr.no td.name a.title, tr.no td.host { color: var(--ink-48); }
   *, *::before, *::after { animation: none !important; transition: none !important; }
   #home .hero-title, #home .lead, #home .tile { opacity: 1 !important; transform: none !important; }
   .topbar { position: static; background: none; }
-  .finder, .more, .back, .seg, footer { display: none; }
+  .filter, .search-row, .more, .back, .seg, footer { display: none; }
+  .board { display: block; }
   section { padding: 16px 0; }
   body { font-size: 10pt; } h1 { font-size: 20pt; } h2 { font-size: 15pt; }
   table { font-size: 9pt; } .stat b { font-size: 18pt; }
@@ -218,7 +234,7 @@ tr.no td.name a.title, tr.no td.host { color: var(--ink-48); }
 <!-- 목록 화면 -->
 <main id="list" hidden>
   <section class="head">
-    <div class="wrap">
+    <div class="wrap wide">
       <a class="back" href="#">← 첫 화면</a>
       <p class="eyebrow" id="l-eyebrow"></p>
       <h1 id="l-title"></h1>
@@ -232,69 +248,86 @@ tr.no td.name a.title, tr.no td.host { color: var(--ink-48); }
     </div>
   </section>
 
-  <section class="finder">
-    <div class="wrap">
-      <h2>찾기</h2>
-      <div class="search-row">
-        <label class="sr-only" for="q">검색어</label>
-        <input id="q" type="search" placeholder="공모전 이름이나 주최 기관으로 찾기" autocomplete="off">
-        <label class="sr-only" for="sort">정렬</label>
-        <select id="sort">
-          <option value="soon">마감이 가까운 순</option>
-          <option value="late">마감이 먼 순</option>
-          <option value="new">최근에 올라온 순</option>
-          <option value="name">이름순</option>
-        </select>
-      </div>
-      <div class="group"><span>참여 자격</span><div class="chips" id="f-elig"></div></div>
-      <div class="me" id="me-box" hidden>
-        <h3>내 조건</h3>
-        <p>여기에 적은 조건으로 참여할 수 있는 공모전을 가립니다. 조건은 이 브라우저에만 저장되고 어디로도 보내지 않습니다.</p>
-        <div class="me-grid">
-          <label>신분
-            <select id="me-job">
-              <option value="worker">직장인·일반인</option>
-              <option value="univ">대학생</option>
-              <option value="grad">대학원생</option>
-              <option value="high">고등학생</option>
-              <option value="mid">중학생</option>
-              <option value="elem">초등학생</option>
-            </select>
-          </label>
-          <label>사는 곳(시·도)
-            <select id="me-region"><option value="">고르지 않음</option></select>
-          </label>
-          <label>생년월일
-            <input id="me-birth" type="date" min="1920-01-01" max="2030-12-31">
-          </label>
-          <label class="check"><input id="me-pub" type="checkbox"> 공무원·공공기관에 다님</label>
+  <section class="work">
+    <div class="wrap wide board">
+      <!-- 왼쪽: 필터 판. 화면을 내려도 따라오고, 길면 판 안에서 따로 굴러간다 -->
+      <aside class="filter" id="filter" aria-label="필터">
+        <div class="filter-head">
+          <h2>필터</h2>
+          <button type="button" class="linkbtn" id="reset">모두 해제</button>
+          <button type="button" class="linkbtn" id="filter-toggle" aria-expanded="false">펼치기</button>
         </div>
-        <div class="me-actions">
-          <button type="button" class="btn ghost" id="me-save">조건 저장</button>
-          <button type="button" class="linkbtn" id="me-clear">조건 지우기</button>
+        <div class="filter-body">
+          <div class="fsec">
+            <div class="fsec-head"><h3>참여 자격</h3><button type="button" class="linkbtn" id="me-toggle">내 조건 넣기</button></div>
+            <div id="f-elig"></div>
+            <div class="me" id="me-box" hidden>
+              <p>적은 조건으로 참여할 수 있는 공모전을 가립니다. 조건은 이 브라우저에만 저장되고 어디로도 보내지 않습니다.</p>
+              <label>신분
+                <select id="me-job">
+                  <option value="worker">직장인·일반인</option>
+                  <option value="univ">대학생</option>
+                  <option value="grad">대학원생</option>
+                  <option value="high">고등학생</option>
+                  <option value="mid">중학생</option>
+                  <option value="elem">초등학생</option>
+                </select>
+              </label>
+              <label>사는 곳(시·도)
+                <select id="me-region"><option value="">고르지 않음</option></select>
+              </label>
+              <label>생년월일
+                <input id="me-birth" type="date" min="1920-01-01" max="2030-12-31">
+              </label>
+              <label class="opt"><input id="me-pub" type="checkbox"><span class="opt-name">공무원·공공기관에 다님</span></label>
+              <div class="me-actions">
+                <button type="button" class="btn ghost" id="me-save">조건 저장</button>
+                <button type="button" class="linkbtn" id="me-clear">조건 지우기</button>
+              </div>
+            </div>
+          </div>
+          <div class="fsec">
+            <div class="fsec-head"><h3>상태</h3><button type="button" class="linkbtn" data-clear="status">해제</button></div>
+            <div id="f-status"></div>
+          </div>
+          <div class="fsec">
+            <div class="fsec-head"><h3>분야</h3><button type="button" class="linkbtn" data-clear="fields">해제</button></div>
+            <div id="f-field"></div>
+          </div>
+          <div class="fsec">
+            <div class="fsec-head"><h3>출처</h3><button type="button" class="linkbtn" data-clear="srcs">해제</button></div>
+            <div id="f-src"></div>
+          </div>
         </div>
-      </div>
-      <div class="group"><span>상태</span><div class="chips" id="f-status"></div></div>
-      <div class="group"><span>분야</span><div class="chips" id="f-field"></div></div>
-      <div class="group"><span>출처</span><div class="chips" id="f-src"></div></div>
-      <button type="button" class="linkbtn" id="reset">조건 모두 지우기</button>
-    </div>
-  </section>
+      </aside>
 
-  <section class="result">
-    <div class="wrap">
-      <div class="countline"><span id="count" aria-live="polite"></span><span>제목을 누르면 원문 공고가 새 창으로 열립니다.</span></div>
-      <table id="rows-table">
-        <thead><tr><th scope="col">공모전</th><th scope="col">주최</th><th scope="col">올라온 날</th><th scope="col">접수 기간</th><th scope="col" class="num">남은 날</th><th scope="col">원문</th></tr></thead>
-        <tbody id="rows"></tbody>
-      </table>
-      <div class="empty" id="empty" hidden>조건에 맞는 공모전이 없습니다. 검색어를 줄이거나 조건을 지워 보세요.</div>
-      <div class="more"><button type="button" class="btn" id="more">더 보기</button></div>
+      <!-- 오른쪽: 검색·정렬과 목록 -->
+      <div class="main">
+        <h2 class="sr-only">목록</h2>
+        <div class="search-row">
+          <label class="sr-only" for="q">검색어</label>
+          <input id="q" type="search" placeholder="공모전 이름이나 주최 기관으로 찾기" autocomplete="off">
+          <label class="sr-only" for="sort">정렬</label>
+          <select id="sort">
+            <option value="soon">마감이 가까운 순</option>
+            <option value="late">마감이 먼 순</option>
+            <option value="new">최근에 올라온 순</option>
+            <option value="name">이름순</option>
+          </select>
+        </div>
+        <div class="countline"><span id="count" aria-live="polite"></span><span>제목을 누르면 원문 공고가 새 창으로 열립니다.</span></div>
+        <table id="rows-table">
+          <thead><tr><th scope="col">공모전</th><th scope="col">주최</th><th scope="col">올라온 날</th><th scope="col">접수 기간</th><th scope="col" class="num">남은 날</th><th scope="col">원문</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+        <div class="empty" id="empty" hidden>조건에 맞는 공모전이 없습니다. 검색어를 줄이거나 필터를 해제해 보세요.</div>
+        <div class="more"><button type="button" class="btn" id="more">더 보기</button></div>
+      </div>
     </div>
   </section>
 
   <section class="about">
-    <div class="wrap">
+    <div class="wrap wide">
       <h2>자료 출처와 기준</h2>
       <table>
         <thead><tr><th scope="col">사이트</th><th scope="col" class="num">가져온 건수</th><th scope="col">가져온 때</th><th scope="col">상태</th></tr></thead>
@@ -507,48 +540,56 @@ var DATA = /*__DATA__*/null;
 
   var group = null, items = [], shown = PAGE, current = [];
 
-  function chipButton(label, count, pressed, onClick) {
-    var b = el('button', 'chip', label);
-    b.type = 'button';
-    b.setAttribute('aria-pressed', pressed ? 'true' : 'false');
-    if (count != null) b.appendChild(el('small', '', num(count)));
-    b.addEventListener('click', onClick);
-    return b;
+  // 필터 판의 한 줄: [칸] 이름 ……… 건수
+  function optRow(type, group, key, label, count, checked, disabled, onChange) {
+    var lab = el('label', disabled ? 'opt off' : 'opt'), inp = el('input');
+    inp.type = type; inp.name = 'f-' + group; inp.checked = checked; inp.disabled = !!disabled;
+    inp.setAttribute('data-key', group + ':' + key);
+    inp.addEventListener('change', onChange);
+    lab.appendChild(inp);
+    lab.appendChild(el('span', 'opt-name', label));
+    if (count != null) lab.appendChild(el('span', 'opt-count', num(count)));
+    return lab;
   }
   function toggle(arr, v) { var i = arr.indexOf(v); if (i >= 0) arr.splice(i, 1); else arr.push(v); }
   function eligPass(x, mode) {
     if (mode === 'all' || !x.j) return true;
     return x.j.v === 'ok' || (mode === 'okcheck' && x.j.v === 'check');
   }
-  function buildChips() {
+  function statusPass(x, mode) {
+    return mode === 'all' || (mode === 'soon' && soon(x)) || (mode === 'new' && x.isNew) || (mode === 'yet' && x.yet);
+  }
+  function buildFilter() {
+    var focused = document.activeElement && document.activeElement.getAttribute && document.activeElement.getAttribute('data-key');
     var box = $('f-elig'); box.textContent = '';
     ELIG.forEach(function (s) {
-      var c = s[0] === 'all' || !ME ? null : items.filter(function (x) { return eligPass(x, s[0]); }).length;
-      var b = chipButton(s[1], c, state.elig === s[0], function () { state.elig = s[0]; refresh(); });
-      if (!ME && s[0] !== 'all') b.disabled = true;
-      box.appendChild(b);
+      var c = !ME && s[0] !== 'all' ? null : items.filter(function (x) { return eligPass(x, s[0]); }).length;
+      box.appendChild(optRow('radio', 'elig', s[0], s[1], c, state.elig === s[0], !ME && s[0] !== 'all',
+        function () { state.elig = s[0]; refresh(); }));
     });
-    var edit = el('button', 'linkbtn', ME ? '내 조건 고치기' : '내 조건 넣기');
-    edit.type = 'button';
-    edit.addEventListener('click', function () { $('me-box').hidden = !$('me-box').hidden; });
-    box.appendChild(edit);
+    $('me-toggle').textContent = ME ? '내 조건 고치기' : '내 조건 넣기';
 
     box = $('f-status'); box.textContent = '';
     STATUS.forEach(function (s) {
-      box.appendChild(chipButton(s[1], null, state.status === s[0], function () { state.status = s[0]; refresh(); }));
+      box.appendChild(optRow('radio', 'status', s[0], s[1], items.filter(function (x) { return statusPass(x, s[0]); }).length,
+        state.status === s[0], false, function () { state.status = s[0]; refresh(); }));
     });
     box = $('f-field'); box.textContent = '';
     (DATA.fields || []).forEach(function (f) {
       var c = items.filter(function (x) { return x.f.indexOf(f) >= 0; }).length;
       if (!c) return;
-      box.appendChild(chipButton(f, c, state.fields.indexOf(f) >= 0, function () { toggle(state.fields, f); refresh(); }));
+      box.appendChild(optRow('checkbox', 'field', f, f, c, state.fields.indexOf(f) >= 0, false, function () { toggle(state.fields, f); refresh(); }));
     });
     box = $('f-src'); box.textContent = '';
     srcNames.forEach(function (s) {
       var c = items.filter(function (x) { return x.l.some(function (l) { return l[0] === s; }); }).length;
       if (!c) return;
-      box.appendChild(chipButton(s, c, state.srcs.indexOf(s) >= 0, function () { toggle(state.srcs, s); refresh(); }));
+      box.appendChild(optRow('checkbox', 'src', s, s, c, state.srcs.indexOf(s) >= 0, false, function () { toggle(state.srcs, s); refresh(); }));
     });
+    if (focused) {                      // 판을 다시 그려도 방금 누른 칸에 초점이 남게 한다(자판으로 고를 때)
+      var again = $('filter').querySelector('[data-key="' + focused.replace(/"/g, '') + '"]');
+      if (again) again.focus();
+    }
   }
 
   // ── 거르기·정렬 ──
@@ -556,9 +597,7 @@ var DATA = /*__DATA__*/null;
     var words = state.q.toLowerCase().split(/\s+/).filter(Boolean);
     var out = items.filter(function (x) {
       if (!eligPass(x, state.elig)) return false;
-      if (state.status === 'soon' && !soon(x)) return false;
-      if (state.status === 'new' && !x.isNew) return false;
-      if (state.status === 'yet' && !x.yet) return false;
+      if (!statusPass(x, state.status)) return false;
       if (state.fields.length && !state.fields.some(function (f) { return x.f.indexOf(f) >= 0; })) return false;
       if (state.srcs.length && !x.l.some(function (l) { return state.srcs.indexOf(l[0]) >= 0; })) return false;
       for (var i = 0; i < words.length; i++) if (x.key.indexOf(words[i]) < 0) return false;
@@ -640,7 +679,7 @@ var DATA = /*__DATA__*/null;
     $('more').textContent = '더 보기 (' + num(Math.max(0, current.length - shown)) + '건 남음)';
   }
   function refresh() {
-    shown = PAGE; current = filtered(); buildChips(); draw();
+    shown = PAGE; current = filtered(); buildFilter(); draw();
     store('contest-filter', { sort: state.sort, status: state.status, elig: state.elig, fields: state.fields, srcs: state.srcs });
   }
   function drawStats() {
@@ -683,6 +722,19 @@ var DATA = /*__DATA__*/null;
   $('more').addEventListener('click', function () { shown += PAGE; draw(); });
   $('reset').addEventListener('click', function () {
     state.q = ''; state.status = 'all'; state.elig = 'all'; state.fields = []; state.srcs = []; $('q').value = ''; refresh();
+  });
+  $('me-toggle').addEventListener('click', function () { $('me-box').hidden = !$('me-box').hidden; });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-clear]'), function (b) {
+    b.addEventListener('click', function () {
+      var k = b.getAttribute('data-clear');
+      if (k === 'status') state.status = 'all'; else state[k] = [];
+      refresh();
+    });
+  });
+  $('filter-toggle').addEventListener('click', function () {      // 좁은 화면에서만 보이는 단추
+    var open = $('filter').classList.toggle('open');
+    this.textContent = open ? '접기' : '펼치기';
+    this.setAttribute('aria-expanded', open ? 'true' : 'false');
   });
 
   // ── 출처 표 ──
