@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>공모전 모음</title>
+<!-- 이 파일은 _만들기/collect.py 가 틀.html 에 자료를 끼워 만든다. 고칠 때는 틀.html 을 고친다. -->
+<style>
+:root {
+  --ink: #1d1d1f; --ink-80: #333333; --ink-48: #7a7a7a; --ink-muted: #6e6e73;
+  --canvas: #ffffff; --parchment: #f5f5f7; --hairline: #e0e0e0; --divider-soft: rgba(0,0,0,.08);
+  --blue: #0066cc; --blue-focus: #0071e3;
+  --danger: #de3412;  --danger-bg: #fdefec;
+  --warning: #9e6a00; --warning-bg: #fff3db;
+  --success: #228738; --success-bg: #eaf6ec;
+  --info: #0b78cb;    --info-bg: #e7f4fe;
+  --font: -apple-system, "SF Pro Display", "SF Pro Text", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
+  --r-sm: 8px; --r-md: 11px; --r-lg: 18px; --r-pill: 9999px;
+  --ease: cubic-bezier(.4, 0, .2, 1); --ease-out: cubic-bezier(.2, .8, .2, 1);
+  --dur-fast: .18s; --dur: .32s; --dur-slow: .6s;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--canvas); color: var(--ink); font: 400 17px/1.5 var(--font); letter-spacing: -.374px; -webkit-font-smoothing: antialiased; }
+h1, h2, h3 { margin: 0 0 .4em; font-weight: 600; line-height: 1.2; letter-spacing: -.02em; }
+h1 { font-size: 40px; letter-spacing: -.028em; }
+h2 { font-size: 32px; }
+h3 { font-size: 19px; }
+p { margin: 0 0 1em; }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.wrap { max-width: 1200px; margin: 0 auto; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+main { position: relative; }
+
+.topbar { position: sticky; top: 0; z-index: 10; height: 52px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 24px;
+  background: rgba(245,245,247,.8); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px); border-bottom: 1px solid var(--divider-soft); }
+.topbar strong { font-weight: 600; }
+.topbar span { font-size: 14px; color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+section { padding: 48px 24px; }
+.hero { background: var(--parchment); padding-top: 64px; }
+.eyebrow { font-size: 14px; font-weight: 600; color: var(--blue); margin: 0 0 8px; }
+.lead { font-size: 19px; font-weight: 300; color: var(--ink-muted); max-width: 760px; }
+@keyframes hero-in { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: none; } }
+.hero h1, .hero .lead, .stats { animation: hero-in var(--dur-slow) var(--ease-out) both; }
+.hero .lead { animation-delay: .12s; }
+.stats { animation-delay: .24s; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 24px; margin-top: 32px; }
+.stat { background: var(--canvas); border: 1px solid var(--hairline); border-radius: var(--r-lg); padding: 24px; }
+.stat b { display: block; font-size: 40px; font-weight: 600; line-height: 1.2; letter-spacing: -.028em; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 15px; color: var(--ink-muted); }
+
+.note { padding: 16px 24px; border-radius: var(--r-md); border-left: 4px solid var(--blue); background: rgba(0,102,204,.06); margin: 0 0 24px; font-size: 15px; }
+.note.warning { border-left-color: var(--warning); background: var(--warning-bg); }
+.note.info { border-left-color: var(--info); background: var(--info-bg); }
+
+.finder { padding-bottom: 16px; }
+.search-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+.search-row input, .search-row select { height: 48px; border: 1px solid var(--ink-48); border-radius: var(--r-sm); padding: 0 16px; font: inherit; color: var(--ink); background: var(--canvas); }
+.search-row input { flex: 1 1 320px; min-width: 0; }
+.search-row input:focus-visible, .search-row select:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid var(--blue-focus); outline-offset: 2px; }
+.group { display: grid; grid-template-columns: 72px 1fr; gap: 8px 16px; align-items: start; margin-bottom: 16px; }
+.group > span { font-size: 15px; font-weight: 600; padding-top: 6px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-block; padding: 4px 12px; border-radius: var(--r-pill); background: var(--parchment); color: var(--ink-80); font-size: 13px; line-height: 1.5; white-space: nowrap; }
+button.chip { border: 1px solid transparent; font-family: inherit; font-size: 14px; padding: 6px 14px; cursor: pointer; transition: transform var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease); }
+button.chip:hover { border-color: rgba(0,0,0,.16); }
+button.chip:active { transform: scale(.95); }
+button.chip[aria-pressed="true"] { background: rgba(0,102,204,.1); color: var(--blue); border-color: var(--blue); font-weight: 600; }
+button.chip[aria-pressed="true"]::before { content: "✓ "; }
+button.chip small { font-size: 12px; color: var(--ink-muted); font-weight: 400; margin-left: 4px; }
+.chip.danger  { color: var(--danger);  background: var(--danger-bg); }
+.chip.warning { color: var(--warning); background: var(--warning-bg); }
+.chip.info    { color: var(--info);    background: var(--info-bg); }
+.chip.success { color: var(--success); background: var(--success-bg); }
+.linkbtn { border: 0; background: none; padding: 0; font: inherit; font-size: 15px; color: var(--blue); cursor: pointer; }
+.linkbtn:hover { text-decoration: underline; }
+
+.result { padding-top: 16px; }
+.countline { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; font-size: 15px; color: var(--ink-muted); }
+.countline b { color: var(--ink); font-weight: 600; }
+table { width: 100%; border-collapse: collapse; font-size: 15px; border-top: 1px solid var(--ink-48); border-bottom: 1px solid var(--ink-48); }
+th { text-align: left; font-weight: 600; background: var(--parchment); font-size: 14px; padding: 12px 16px; border-bottom: 1px solid var(--hairline); white-space: nowrap; }
+td { padding: 12px 16px; border-bottom: 1px solid var(--divider-soft); vertical-align: top; }
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr { transition: background var(--dur-fast) var(--ease); }
+tbody tr:hover { background: var(--parchment); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.period { white-space: nowrap; font-variant-numeric: tabular-nums; }
+td.name, td.host { overflow-wrap: anywhere; }
+td.name a.title { color: var(--ink); font-weight: 600; font-size: 16px; }
+td.name a.title:hover { color: var(--blue); }
+td.name .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+td.name .tags .chip { font-size: 12px; padding: 2px 10px; }
+td.host { color: var(--ink-80); max-width: 220px; }
+td.src a { display: inline-block; margin-right: 12px; white-space: nowrap; }
+.sub { display: block; font-size: 13px; color: var(--ink-muted); margin-top: 4px; }
+.empty { padding: 48px 16px; text-align: center; color: var(--ink-muted); }
+.more { text-align: center; margin-top: 32px; }
+.btn { display: inline-block; min-height: 48px; padding: 11px 28px; border-radius: var(--r-pill); background: var(--blue); color: #fff; font: inherit; border: 0; cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease); }
+.btn:hover { background: var(--blue-focus); }
+.btn:active { transform: scale(.95); }
+.about { background: var(--parchment); }
+.about table { background: var(--canvas); margin-bottom: 24px; }
+.history { font-size: 14px; color: var(--ink-muted); border-top: 1px solid var(--hairline); padding-top: 16px; margin: 0; }
+
+@media (max-width: 767px) {
+  h1 { font-size: 28px; } h2 { font-size: 24px; }
+  section { padding: 32px 16px; } .topbar { padding: 0 16px; }
+  .group { grid-template-columns: 1fr; }
+  #list thead { display: none; }
+  #list, #list tbody, #list tr, #list td { display: block; }
+  #list tr { padding: 16px 0; border-bottom: 1px solid var(--divider-soft); }
+  #list td { padding: 2px 0; border: 0; max-width: none; text-align: left; }
+  #list td.num { margin-top: 6px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+@page { size: A4 landscape; margin: 12mm; }
+@media print {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .hero h1, .hero .lead, .stats { opacity: 1 !important; transform: none !important; }
+  .topbar { position: static; background: none; }
+  .finder, .more { display: none; }
+  section { padding: 16px 0; }
+  body { font-size: 10pt; } h1 { font-size: 20pt; } h2 { font-size: 15pt; }
+  table { font-size: 9pt; } .stat b { font-size: 18pt; }
+  tr { break-inside: avoid; }
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <strong>공모전 모음</strong>
+  <span id="stamp"></span>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="wrap">
+      <p class="eyebrow">여섯 사이트를 한 화면에서</p>
+      <h1>진행 중인 공모전</h1>
+      <p class="lead" id="lead">소통24·정책브리핑·씽굿·콘테스트코리아·위비티·링커리어에 올라온 공모전을 모았습니다. 같은 공모전은 한 줄로 합쳤고, 목록은 매일 자동으로 새로 받습니다.</p>
+      <div id="alerts"></div>
+      <div class="stats">
+        <div class="stat"><b id="st-all">0</b><span>접수 중이거나 접수 예정인 공모전</span></div>
+        <div class="stat"><b id="st-soon">0</b><span>7일 안에 마감</span></div>
+        <div class="stat"><b id="st-new">0</b><span>최근 3일 사이 새로 올라옴</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="finder">
+    <div class="wrap">
+      <h2>찾기</h2>
+      <div class="search-row">
+        <label class="sr-only" for="q">검색어</label>
+        <input id="q" type="search" placeholder="공모전 이름이나 주최 기관으로 찾기" autocomplete="off">
+        <label class="sr-only" for="sort">정렬</label>
+        <select id="sort">
+          <option value="soon">마감이 가까운 순</option>
+          <option value="late">마감이 먼 순</option>
+          <option value="new">새로 올라온 순</option>
+          <option value="name">이름순</option>
+        </select>
+      </div>
+      <div class="group"><span>상태</span><div class="chips" id="f-status"></div></div>
+      <div class="group"><span>분야</span><div class="chips" id="f-field"></div></div>
+      <div class="group"><span>출처</span><div class="chips" id="f-src"></div></div>
+      <button type="button" class="linkbtn" id="reset">조건 모두 지우기</button>
+    </div>
+  </section>
+
+  <section class="result">
+    <div class="wrap">
+      <div class="countline"><span id="count" aria-live="polite"></span><span>제목을 누르면 원문 공고가 새 창으로 열립니다.</span></div>
+      <table id="list">
+        <thead><tr><th scope="col">공모전</th><th scope="col">주최</th><th scope="col">접수 기간</th><th scope="col" class="num">남은 날</th><th scope="col">원문</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <div class="empty" id="empty" hidden>조건에 맞는 공모전이 없습니다. 검색어를 줄이거나 조건을 지워 보세요.</div>
+      <div class="more"><button type="button" class="btn" id="more">더 보기</button></div>
+    </div>
+  </section>
+
+  <section class="about">
+    <div class="wrap">
+      <h2>자료 출처</h2>
+      <table>
+        <thead><tr><th scope="col">사이트</th><th scope="col" class="num">가져온 건수</th><th scope="col">가져온 때</th><th scope="col">상태</th></tr></thead>
+        <tbody id="sources"></tbody>
+      </table>
+      <p class="note info">이 목록은 각 사이트의 목록 화면에서 제목·주최·기간만 옮긴 것입니다. 접수 기간과 응모 자격은 반드시 주최 기관의 원문 공고로 확인하십시오. 남은 날을 사이트가 'D-19'처럼만 알려 준 경우에는 마감일을 거꾸로 셈했으므로 하루쯤 어긋날 수 있습니다.</p>
+      <p class="history" id="history"></p>
+    </div>
+  </section>
+</main>
+
+<script>
+var DATA = /*__DATA__*/null;
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var DAY = 86400000, PAGE = 50;
+  var today = new Date(); today.setHours(0, 0, 0, 0);
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function toDate(s) { if (!s) return null; var p = s.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
+  function days(d) { return d ? Math.round((d - today) / DAY) : null; }
+  function two(n) { return (n < 10 ? '0' : '') + n; }
+  function fmt(d) {
+    if (!d) return '';
+    var md = two(d.getMonth() + 1) + '.' + two(d.getDate());
+    return d.getFullYear() === today.getFullYear() ? md : d.getFullYear() + '.' + md;
+  }
+  function safeUrl(u) { return /^https?:\/\//i.test(u || '') ? u : '#'; }
+
+  if (!DATA || !DATA.items) {
+    $('lead').textContent = '아직 자료가 없습니다. 같은 폴더의 업데이트.bat 을 실행하면 목록이 채워집니다.';
+    $('more').hidden = true;
+    return;
+  }
+
+  // ── 자료 다듬기: 이미 마감된 것은 빼고, 남은 날을 오늘 기준으로 다시 센다 ──
+  var items = [];
+  DATA.items.forEach(function (it) {
+    var e = toDate(it.e), s = toDate(it.s), n = toDate(it.n);
+    var left = days(e);
+    if (left != null && left < 0) return;
+    items.push({
+      t: it.t, h: it.h || '', f: it.f || ['기타'], g: it.g || '', l: it.l || [],
+      e: e, s: s, left: left,
+      yet: !!(s && s > today),
+      isNew: !!(n && days(n) >= -2),
+      nAt: n ? n.getTime() : 0,
+      key: (it.t + ' ' + (it.h || '')).toLowerCase()
+    });
+  });
+
+  // ── 머리 숫자와 알림 ──
+  var soonCnt = items.filter(function (x) { return x.left != null && x.left <= 7 && !x.yet; }).length;
+  var newCnt = items.filter(function (x) { return x.isNew; }).length;
+  countUp($('st-all'), items.length); countUp($('st-soon'), soonCnt); countUp($('st-new'), newCnt);
+  $('stamp').textContent = '마지막 갱신 ' + DATA.generated;
+
+  var gen = toDate((DATA.generated || '').slice(0, 10)), age = gen ? -days(gen) : 0;
+  if (age >= 2) addAlert('이 목록은 ' + age + '일 전에 받은 것입니다. 같은 폴더의 업데이트.bat 을 실행하면 새로 받습니다.');
+  var failed = DATA.sources.filter(function (s) { return !s.ok; }).map(function (s) { return s.name; });
+  if (failed.length) addAlert(failed.join(', ') + ' 사이트는 이번에 받지 못해 지난번 자료를 보여 줍니다.');
+  function addAlert(msg) { $('alerts').appendChild(el('p', 'note warning', msg)); }
+
+  function countUp(node, end) {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) { node.textContent = end.toLocaleString('ko-KR'); return; }
+    var t0 = performance.now(), dur = 1000;
+    (function step(t) {
+      var p = Math.min(1, (t - t0) / dur);
+      node.textContent = Math.round(end * (1 - Math.pow(1 - p, 3))).toLocaleString('ko-KR');
+      if (p < 1) requestAnimationFrame(step);
+    })(t0);
+    setTimeout(function () { node.textContent = end.toLocaleString('ko-KR'); }, dur + 400);   // 숨은 탭에서는 그림 갱신이 멈추므로 안전장치
+  }
+
+  // ── 조건 ──
+  var state = { q: '', sort: 'soon', status: 'all', fields: [], srcs: [] };
+  try {
+    var saved = JSON.parse(localStorage.getItem('contest-filter') || 'null');
+    if (saved) ['sort', 'status', 'fields', 'srcs'].forEach(function (k) { if (saved[k] != null) state[k] = saved[k]; });
+  } catch (e) {}
+  function save() { try { localStorage.setItem('contest-filter', JSON.stringify(state)); } catch (e) {} }
+
+  var STATUS = [['all', '전체'], ['soon', '7일 안에 마감'], ['new', '새로 올라옴'], ['yet', '접수 예정']];
+  var srcNames = DATA.sources.map(function (s) { return s.name; });
+  var fieldNames = (DATA.fields || []).filter(function (f) { return items.some(function (x) { return x.f.indexOf(f) >= 0; }); });
+  state.fields = state.fields.filter(function (f) { return fieldNames.indexOf(f) >= 0; });
+  state.srcs = state.srcs.filter(function (s) { return srcNames.indexOf(s) >= 0; });
+  if (!STATUS.some(function (s) { return s[0] === state.status; })) state.status = 'all';
+
+  function chipButton(label, count, pressed, onClick) {
+    var b = el('button', 'chip', label);
+    b.type = 'button';
+    b.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+    if (count != null) b.appendChild(el('small', '', count.toLocaleString('ko-KR')));
+    b.addEventListener('click', onClick);
+    return b;
+  }
+  function toggle(arr, v) { var i = arr.indexOf(v); if (i >= 0) arr.splice(i, 1); else arr.push(v); }
+  function buildChips() {
+    var box = $('f-status'); box.textContent = '';
+    STATUS.forEach(function (s) {
+      box.appendChild(chipButton(s[1], null, state.status === s[0], function () { state.status = s[0]; refresh(); }));
+    });
+    box = $('f-field'); box.textContent = '';
+    fieldNames.forEach(function (f) {
+      var c = items.filter(function (x) { return x.f.indexOf(f) >= 0; }).length;
+      box.appendChild(chipButton(f, c, state.fields.indexOf(f) >= 0, function () { toggle(state.fields, f); refresh(); }));
+    });
+    box = $('f-src'); box.textContent = '';
+    srcNames.forEach(function (s) {
+      var c = items.filter(function (x) { return x.l.some(function (l) { return l[0] === s; }); }).length;
+      box.appendChild(chipButton(s, c, state.srcs.indexOf(s) >= 0, function () { toggle(state.srcs, s); refresh(); }));
+    });
+  }
+
+  // ── 거르기·정렬 ──
+  var shown = PAGE, current = [];
+  function filtered() {
+    var words = state.q.toLowerCase().split(/\s+/).filter(Boolean);
+    var out = items.filter(function (x) {
+      if (state.status === 'soon' && !(x.left != null && x.left <= 7 && !x.yet)) return false;
+      if (state.status === 'new' && !x.isNew) return false;
+      if (state.status === 'yet' && !x.yet) return false;
+      if (state.fields.length && !state.fields.some(function (f) { return x.f.indexOf(f) >= 0; })) return false;
+      if (state.srcs.length && !x.l.some(function (l) { return state.srcs.indexOf(l[0]) >= 0; })) return false;
+      for (var i = 0; i < words.length; i++) if (x.key.indexOf(words[i]) < 0) return false;
+      return true;
+    });
+    var big = 1e9;
+    var by = {
+      soon: function (a, b) { return (a.left == null ? big : a.left) - (b.left == null ? big : b.left); },
+      late: function (a, b) { return (b.left == null ? -1 : b.left) - (a.left == null ? -1 : a.left); },
+      'new': function (a, b) { return b.nAt - a.nAt || (a.left == null ? big : a.left) - (b.left == null ? big : b.left); },
+      name: function (a, b) { return a.t.localeCompare(b.t, 'ko'); }
+    };
+    return out.sort(by[state.sort] || by.soon);
+  }
+
+  function leftCell(x) {
+    var td = el('td', 'num');
+    if (x.left == null) { td.textContent = '-'; return td; }
+    if (x.yet) {
+      td.appendChild(el('span', 'chip info', '접수 예정'));
+      td.appendChild(el('span', 'sub', fmt(x.s) + ' 시작'));
+    } else if (x.left === 0) {
+      td.appendChild(el('span', 'chip danger', '오늘 마감'));
+    } else if (x.left <= 7) {
+      td.appendChild(el('span', 'chip warning', x.left + '일 남음 · 마감 임박'));
+    } else {
+      td.textContent = x.left + '일 남음';
+    }
+    return td;
+  }
+  function row(x) {
+    var tr = el('tr');
+    var name = el('td', 'name');
+    var a = el('a', 'title', x.t);
+    a.href = safeUrl(x.l[0] && x.l[0][1]); a.target = '_blank'; a.rel = 'noopener noreferrer';
+    name.appendChild(a);
+    var tags = el('div', 'tags');
+    if (x.isNew) tags.appendChild(el('span', 'chip success', '새 글'));
+    x.f.forEach(function (f) { tags.appendChild(el('span', 'chip', f)); });
+    name.appendChild(tags);
+    if (x.g) name.appendChild(el('span', 'sub', '대상: ' + x.g));
+    tr.appendChild(name);
+    tr.appendChild(el('td', 'host', x.h || '-'));
+    tr.appendChild(el('td', 'period', x.e ? (x.s ? fmt(x.s) + ' ~ ' : '~ ') + fmt(x.e) : '-'));
+    tr.appendChild(leftCell(x));
+    var src = el('td', 'src');
+    x.l.forEach(function (l) {
+      var s = el('a', '', l[0]);
+      s.href = safeUrl(l[1]); s.target = '_blank'; s.rel = 'noopener noreferrer';
+      src.appendChild(s);
+    });
+    tr.appendChild(src);
+    return tr;
+  }
+  function draw() {
+    var body = $('rows'); body.textContent = '';
+    var frag = document.createDocumentFragment();
+    current.slice(0, shown).forEach(function (x) { frag.appendChild(row(x)); });
+    body.appendChild(frag);
+    var n = Math.min(shown, current.length);
+    $('count').textContent = '';
+    $('count').appendChild(document.createTextNode('조건에 맞는 공모전 '));
+    $('count').appendChild(el('b', '', current.length.toLocaleString('ko-KR') + '건'));
+    $('count').appendChild(document.createTextNode(current.length ? ' 가운데 ' + n.toLocaleString('ko-KR') + '건을 보여 줍니다.' : ''));
+    $('empty').hidden = current.length > 0;
+    $('list').hidden = current.length === 0;
+    $('more').hidden = shown >= current.length;
+    $('more').textContent = '더 보기 (' + Math.max(0, current.length - shown).toLocaleString('ko-KR') + '건 남음)';
+  }
+  function refresh() {
+    shown = PAGE; current = filtered(); buildChips(); draw(); save();
+  }
+
+  $('q').addEventListener('input', function () { state.q = this.value; shown = PAGE; current = filtered(); draw(); });
+  $('sort').value = state.sort;
+  $('sort').addEventListener('change', function () { state.sort = this.value; refresh(); });
+  $('more').addEventListener('click', function () { shown += PAGE; draw(); });
+  $('reset').addEventListener('click', function () {
+    state.q = ''; state.status = 'all'; state.fields = []; state.srcs = []; $('q').value = ''; refresh();
+  });
+
+  // ── 출처 표 ──
+  DATA.sources.forEach(function (s) {
+    var tr = el('tr'), td = el('td'), a = el('a', '', s.name);
+    a.href = safeUrl(s.home); a.target = '_blank'; a.rel = 'noopener noreferrer';
+    td.appendChild(a); tr.appendChild(td);
+    tr.appendChild(el('td', 'num', (s.count || 0).toLocaleString('ko-KR')));
+    tr.appendChild(el('td', '', s.at || '-'));
+    var st = el('td');
+    st.appendChild(el('span', s.ok ? 'chip success' : 'chip warning', s.ok ? '정상' : '받지 못함 · 지난 자료'));
+    tr.appendChild(st);
+    $('sources').appendChild(tr);
+  });
+  $('history').textContent = '마지막 갱신 ' + DATA.generated + ' · 매일 한 번 자동으로 새로 받습니다. 지금 바로 받으려면 같은 폴더의 업데이트.bat 을 실행합니다.';
+
+  refresh();
+})();
+</script>
+</body>
+</html>
