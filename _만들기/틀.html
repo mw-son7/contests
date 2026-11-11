@@ -169,7 +169,19 @@ td.src a { display: inline-block; margin-right: 12px; white-space: nowrap; }
 tr.no td.name a.title, tr.no td.host { color: var(--ink-48); }
 .sub { display: block; font-size: 13px; color: var(--ink-muted); margin-top: 4px; }
 .empty { padding: 48px 16px; text-align: center; color: var(--ink-muted); }
-.more { text-align: center; margin-top: 32px; }
+/* 페이지 단추 */
+#main-col { scroll-margin-top: 68px; }
+.pager { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; margin-top: 32px; }
+.pg { min-width: 40px; height: 40px; padding: 0 12px; border: 1px solid var(--hairline); border-radius: var(--r-sm); background: var(--canvas);
+  color: var(--ink-80); font: inherit; font-size: 15px; font-variant-numeric: tabular-nums; cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+.pg:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }
+.pg:active:not(:disabled) { transform: scale(.95); }
+.pg[aria-current="page"] { border-color: var(--blue); color: var(--blue); font-weight: 600; background: rgba(0,102,204,.08); cursor: default; }
+.pg:disabled { opacity: .45; cursor: default; }
+.pg-gap { color: var(--ink-48); padding: 0 2px; }
+.pg-info { flex-basis: 100%; text-align: center; font-size: 15px; color: var(--ink-muted); margin-top: 4px; }
+.pg-info b { color: var(--ink); font-weight: 600; }
 .about { background: var(--parchment); }
 .about table { background: var(--canvas); margin-bottom: 24px; }
 .about h3 { margin-top: 32px; }
@@ -208,7 +220,7 @@ tr.no td.name a.title, tr.no td.host { color: var(--ink-48); }
   *, *::before, *::after { animation: none !important; transition: none !important; }
   #home .hero-title, #home .lead, #home .tile { opacity: 1 !important; transform: none !important; }
   .topbar { position: static; background: none; }
-  .filter, .search-row, .more, .back, .seg, footer { display: none; }
+  .filter, .search-row, .pager, .back, .seg, footer { display: none; }
   .board { display: block; }
   section { padding: 16px 0; }
   body { font-size: 10pt; } h1 { font-size: 20pt; } h2 { font-size: 15pt; }
@@ -314,7 +326,7 @@ tr.no td.name a.title, tr.no td.host { color: var(--ink-48); }
       </aside>
 
       <!-- 오른쪽: 검색·정렬과 목록 -->
-      <div class="main">
+      <div class="main" id="main-col">
         <h2 class="sr-only">목록</h2>
         <div class="search-row">
           <label class="sr-only" for="q">검색어</label>
@@ -327,13 +339,13 @@ tr.no td.name a.title, tr.no td.host { color: var(--ink-48); }
             <option value="name">이름순</option>
           </select>
         </div>
-        <div class="countline"><span id="count" aria-live="polite"></span><span>제목을 누르면 원문 공고가 새 창으로 열립니다.</span></div>
+        <div class="countline"><span id="count" aria-live="polite"></span><span>제목을 누르면 주최 측 사이트가 새 창으로 열립니다.</span></div>
         <table id="rows-table">
-          <thead><tr><th scope="col" class="fav"><span class="sr-only">관심</span></th><th scope="col">공모전</th><th scope="col">주최</th><th scope="col">올라온 날</th><th scope="col">접수 기간</th><th scope="col" class="num">남은 날</th><th scope="col">원문</th></tr></thead>
+          <thead><tr><th scope="col" class="fav"><span class="sr-only">관심</span></th><th scope="col">공모전</th><th scope="col">주최</th><th scope="col">올라온 날</th><th scope="col">접수 기간</th><th scope="col" class="num">남은 날</th><th scope="col">모음 사이트</th></tr></thead>
           <tbody id="rows"></tbody>
         </table>
         <div class="empty" id="empty" hidden>조건에 맞는 공모전이 없습니다. 검색어를 줄이거나 필터를 해제해 보세요.</div>
-        <div class="more"><button type="button" class="btn" id="more">더 보기</button></div>
+        <nav class="pager" id="pager" aria-label="페이지 이동"></nav>
       </div>
     </div>
   </section>
@@ -346,6 +358,11 @@ tr.no td.name a.title, tr.no td.host { color: var(--ink-48); }
         <tbody id="sources"></tbody>
       </table>
       <p class="note info">이 목록은 각 사이트의 목록 화면에서 제목·주최·대상·기간만 옮긴 것입니다. 접수 기간과 응모 자격은 반드시 주최 기관의 원문 공고로 확인하십시오.</p>
+      <h3>제목을 누르면 가는 곳</h3>
+      <ul>
+        <li>모음 사이트에 적힌 주최 측 홈페이지 주소로 갑니다. 주최 측이 적어 낸 주소여서 공모전 안내 쪽이 아니라 기관 대문이나 접수 양식으로 가는 것도 있습니다.</li>
+        <li>주최 측 주소가 적혀 있지 않은 공모전과 소통24에만 올라온 공모전은 모음 사이트의 공고로 갑니다. 표의 '모음 사이트' 칸에서는 언제나 모음 사이트의 공고를 열 수 있습니다.</li>
+      </ul>
       <h3>공공·민간을 나눈 기준</h3>
       <ul>
         <li>공공은 중앙부처·지방자치단체·교육청·공공기관·공기업이 여는 공모전입니다. 소통24와 정책브리핑에 올라온 것은 모두 공공으로 넣었습니다.</li>
@@ -498,7 +515,7 @@ var DATA = /*__DATA__*/null;
     var left = days(e);
     if (left != null && left < 0) return;
     ALL.push({
-      id: favKey(it.t),
+      id: favKey(it.t), u: it.u || '',
       t: it.t, h: it.h || '', f: it.f || ['기타'], l: it.l || [], pub: !!it.p,
       w: it.w || [], rg: it.rg || null, rx: !!it.rx, a: it.a || null, y: !!it.y, pb: !!it.pb, q: it.q || '',
       e: e, s: s, d: d, rough: !!it.dr, left: left,
@@ -566,7 +583,7 @@ var DATA = /*__DATA__*/null;
   if (!Array.isArray(state.srcs)) state.srcs = [];
   state.srcs = state.srcs.filter(function (s) { return srcNames.indexOf(s) >= 0; });
 
-  var group = null, items = [], shown = PAGE, current = [];
+  var group = null, items = [], page = 1, current = [];
 
   // 필터 판의 한 줄: [칸] 이름 ……… 건수
   function optRow(type, group, key, label, count, checked, disabled, onChange) {
@@ -677,13 +694,14 @@ var DATA = /*__DATA__*/null;
     paintStar();
     star.addEventListener('click', function () {
       setFav(x, !isFav(x));
-      if (state.fav) { current = filtered(); draw(); } else paintStar();     // 별표만 보는 중에 별을 빼면 그 줄이 목록에서 빠진다
+      if (state.fav) { current = filtered(); draw(); } else paintStar();     // 별표만 보는 중에 별을 빼면 그 줄이 목록에서 빠진다(페이지는 draw 가 맞춘다)
       buildFilter();
     });
     favTd.appendChild(star); tr.appendChild(favTd);
     var name = el('td', 'name');
-    var a = el('a', 'title', x.t);
-    a.href = safeUrl(x.l[0] && x.l[0][1]); a.target = '_blank'; a.rel = 'noopener noreferrer';
+    var a = el('a', 'title', x.t);          // 제목은 주최 측 사이트로. 그 주소를 모르면 모음 사이트의 공고로 간다
+    a.href = safeUrl(x.u || (x.l[0] && x.l[0][1])); a.target = '_blank'; a.rel = 'noopener noreferrer';
+    a.title = x.u ? '주최 측 사이트 열기' : '주최 측 주소를 알 수 없어 ' + (x.l[0] ? x.l[0][0] : '모음 사이트') + '의 공고를 엽니다';
     name.appendChild(a);
     var tags = el('div', 'tags');
     if (x.j) tags.appendChild(el('span', VERDICT[x.j.v][0], VERDICT[x.j.v][1]));
@@ -712,26 +730,61 @@ var DATA = /*__DATA__*/null;
     tr.appendChild(src);
     return tr;
   }
+  // 페이지 단추: 이전 · 1 … 4 5 [6] 7 8 … 17 · 다음, 그 아래에 '현재 6페이지 / 전체 17페이지'
+  function drawPager(pages) {
+    var nav = $('pager'); nav.textContent = '';
+    nav.hidden = current.length === 0;
+    if (!current.length) return;
+    function button(label, target, aria) {
+      var b = el('button', 'pg', label);
+      b.type = 'button';
+      if (aria) b.setAttribute('aria-label', aria);
+      if (target < 1 || target > pages) b.disabled = true;
+      else if (target === page && !aria) b.setAttribute('aria-current', 'page');
+      else b.addEventListener('click', function () { goPage(target); });
+      return b;
+    }
+    nav.appendChild(button('이전', page - 1, '이전 페이지'));
+    var shownNums = [], last = 0;
+    for (var p = 1; p <= pages; p++) if (p === 1 || p === pages || Math.abs(p - page) <= 2) shownNums.push(p);
+    shownNums.forEach(function (p) {
+      if (p - last > 1) nav.appendChild(el('span', 'pg-gap', '…'));
+      nav.appendChild(button(String(p), p, null));
+      last = p;
+    });
+    nav.appendChild(button('다음', page + 1, '다음 페이지'));
+    var info = el('p', 'pg-info');
+    info.appendChild(document.createTextNode('현재 '));
+    info.appendChild(el('b', '', num(page) + '페이지'));
+    info.appendChild(document.createTextNode(' / 전체 ' + num(pages) + '페이지'));
+    nav.appendChild(info);
+  }
+  function goPage(n) {
+    page = n; draw();
+    $('main-col').scrollIntoView({ block: 'start' });      // 새 페이지의 첫 줄부터 보이게 목록 머리로 올라간다
+  }
   function draw() {
+    var pages = Math.max(1, Math.ceil(current.length / PAGE));
+    page = Math.min(Math.max(1, page), pages);
+    var from = (page - 1) * PAGE, to = Math.min(from + PAGE, current.length);
     var body = $('rows'); body.textContent = '';
     var frag = document.createDocumentFragment();
-    current.slice(0, shown).forEach(function (x) { frag.appendChild(row(x)); });
+    current.slice(from, to).forEach(function (x) { frag.appendChild(row(x)); });
     body.appendChild(frag);
-    var n = Math.min(shown, current.length), c = $('count');
+    var c = $('count');
     c.textContent = '';
     c.appendChild(document.createTextNode('조건에 맞는 공모전 '));
     c.appendChild(el('b', '', num(current.length) + '건'));
-    c.appendChild(document.createTextNode(current.length ? ' 가운데 ' + num(n) + '건을 보여 줍니다.' : ''));
+    c.appendChild(document.createTextNode(current.length ? ' 가운데 ' + num(from + 1) + '~' + num(to) + '번째 · ' + num(page) + ' / ' + num(pages) + '페이지' : ''));
+    drawPager(pages);
     $('empty').textContent = state.fav && !items.some(isFav)
       ? '별표 한 공모전이 없습니다. 필터의 \'별표 한 공모전만\'을 끄고, 목록에서 ☆를 눌러 관심 공모전으로 넣어 보세요.'
       : '조건에 맞는 공모전이 없습니다. 검색어를 줄이거나 필터를 해제해 보세요.';
     $('empty').hidden = current.length > 0;
     $('rows-table').hidden = current.length === 0;
-    $('more').hidden = shown >= current.length;
-    $('more').textContent = '더 보기 (' + num(Math.max(0, current.length - shown)) + '건 남음)';
   }
   function refresh() {
-    shown = PAGE; current = filtered(); buildFilter(); draw();
+    page = 1; current = filtered(); buildFilter(); draw();
     store('contest-filter', { sort: state.sort, status: state.status, elig: state.elig, fav: state.fav, fields: state.fields, srcs: state.srcs });
   }
   function drawStats() {
@@ -768,10 +821,9 @@ var DATA = /*__DATA__*/null;
     rejudge(); fillMeForm(); $('me-box').hidden = true; drawStats(); refresh();
   });
 
-  $('q').addEventListener('input', function () { state.q = this.value; shown = PAGE; current = filtered(); draw(); });
+  $('q').addEventListener('input', function () { state.q = this.value; page = 1; current = filtered(); draw(); });
   $('sort').value = state.sort;
   $('sort').addEventListener('change', function () { state.sort = this.value; refresh(); });
-  $('more').addEventListener('click', function () { shown += PAGE; draw(); });
   $('reset').addEventListener('click', function () {
     state.q = ''; state.status = 'all'; state.elig = 'all'; state.fav = false; state.fields = []; state.srcs = []; $('q').value = ''; refresh();
   });
