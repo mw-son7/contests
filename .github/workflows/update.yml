@@ -67,3 +67,13 @@ jobs:
 
       - id: deploy
         uses: actions/deploy-pages@v5
+        continue-on-error: true
+
+      # 내보내기가 '방금 올린 꾸러미를 찾지 못했다'며 실패한 적이 있다(2026-11-11, GitHub 쪽 일시 오류).
+      # 그럴 때는 1분 쉬고 한 번 더 해 본다. 두 번째도 실패하면 실행 전체가 실패로 남아 메일이 온다.
+      - name: 내보내기 실패 시 잠깐 쉬기
+        if: steps.deploy.outcome == 'failure'
+        run: sleep 60
+      - name: 내보내기 다시 해 보기
+        if: steps.deploy.outcome == 'failure'
+        uses: actions/deploy-pages@v5
