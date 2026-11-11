@@ -183,9 +183,11 @@ tr.no td.name a.title, tr.no td.host { color: var(--ink-48); }
 .pg-info { flex-basis: 100%; text-align: center; font-size: 15px; color: var(--ink-muted); margin-top: 4px; }
 .pg-info b { color: var(--ink); font-weight: 600; }
 .about { background: var(--parchment); }
-.about table { background: var(--canvas); margin-bottom: 24px; }
+.about table { background: var(--canvas); }
+.about .table-scroll { overflow-x: auto; margin-bottom: 24px; }      /* 좁은 화면에서 표가 넘치면 표 안에서만 옆으로 민다 */
+.about td { white-space: nowrap; }
 .about h3 { margin-top: 32px; }
-.about table, .about .note, .about ul { max-width: 1040px; }
+.about .table-scroll, .about .note, .about ul { max-width: 1040px; }
 .about ul { margin: 0 0 16px; padding-left: 24px; font-size: 15px; color: var(--ink-80); }
 .about li { margin-bottom: 8px; }
 .history { font-size: 14px; color: var(--ink-muted); border-top: 1px solid var(--hairline); padding-top: 16px; margin: 24px 0 0; }
@@ -202,6 +204,11 @@ tr.no td.name a.title, tr.no td.host { color: var(--ink-48); }
   h1 { font-size: 28px; } h2 { font-size: 24px; } .hero-title { font-size: 40px; }
   section { padding: 32px 16px; } .topbar { padding: 0 16px; gap: 12px; } #home { padding: 32px 16px; align-items: flex-start; }
   #stamp { display: none; }
+  .head { padding-top: 24px; } .back { margin-bottom: 16px; }
+  .stats { grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }      /* 숫자 칸을 두 줄 두 칸으로 — 목록이 빨리 보이게 */
+  .stat { padding: 16px; } .stat b { font-size: 28px; } .stat span { font-size: 13px; }
+  .about th, .about td { padding: 10px 12px; }
+  .pager { gap: 6px; } .pg { min-width: 36px; padding: 0 8px; }
   .tiles { grid-template-columns: 1fr; } .tile { min-height: 0; padding: 24px; } .tile .no { margin-bottom: 16px; } .tile .val { font-size: 56px; }
   #rows-table thead { display: none; }
   #rows-table, #rows-table tbody, #rows-table tr, #rows-table td { display: block; }
@@ -353,10 +360,12 @@ tr.no td.name a.title, tr.no td.host { color: var(--ink-48); }
   <section class="about">
     <div class="wrap wide">
       <h2>자료 출처와 기준</h2>
-      <table>
-        <thead><tr><th scope="col">사이트</th><th scope="col" class="num">가져온 건수</th><th scope="col">가져온 때</th><th scope="col">상태</th></tr></thead>
-        <tbody id="sources"></tbody>
-      </table>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th scope="col">사이트</th><th scope="col" class="num">가져온 건수</th><th scope="col">가져온 때</th><th scope="col">상태</th></tr></thead>
+          <tbody id="sources"></tbody>
+        </table>
+      </div>
       <p class="note info">이 목록은 각 사이트의 목록 화면에서 제목·주최·대상·기간만 옮긴 것입니다. 접수 기간과 응모 자격은 반드시 주최 기관의 원문 공고로 확인하십시오.</p>
       <h3>제목을 누르면 가는 곳</h3>
       <ul>
