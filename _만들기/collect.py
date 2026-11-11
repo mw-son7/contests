@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """공모전 모음 — 수집기.
 
-여섯 사이트의 '목록' 화면만 읽어 제목·주최·기간·원문 주소를 모으고,
+여섯 사이트의 '목록' 화면을 읽어 제목·주최·기간·원문 주소를 모으고,
+공모전마다 상세 화면을 한 번 열어 주최 측 주소와 'AI 사용 가능' 문장 한 줄을 찾은 뒤,
 틀.html 에 자료를 끼워 넣어 ../공모전모음.html 한 파일로 만든다.
 표준 라이브러리만 쓰므로 기기마다 따로 설치할 것이 없다.
 
@@ -631,11 +632,10 @@ def run_source(entry):
 # _기록.json 에 적어 두고 다시 열지 않으므로, 날마다 새로 올라온 것만 열어 보게 된다.
 
 DETAIL_ORDER = ("위비티", "링커리어", "콘테스트코리아")
-HOME_CAP = 200          # 한 번 실행에 사이트마다 열어 볼 상세 화면 수의 한도(처음 채울 때 한꺼번에 몰리지 않게)
+DETAIL_CAP = 500        # 한 번 실행에 사이트마다 열어 볼 상세 화면 수의 한도(처음 채울 때 한꺼번에 몰리지 않게)
 
 
-def home_from_detail(src, url, session):
-    t = session.text(url)
+def home_from_page(src, t):
     if src == "위비티":
         m = re.search(r'<span class="tit">홈페이지</span>\s*<a href="([^"]+)"', t)
         return host_url(m.group(1)) if m else ""
@@ -646,30 +646,103 @@ def home_from_detail(src, url, session):
     return host_url(m.group(1)) if m else ""
 
 
-def fetch_homes(todo, cache):
-    """todo = [(사이트, 상세 화면 주소)…]. 사이트마다 차례로(사이트끼리는 나란히) 열어 cache 에 적는다."""
+# ───────────────────────── AI 사용 가능 표기 ─────────────────────────
+# 모음 사이트 상세 화면의 공고 본문(글자로 적힌 부분)에서 'AI 활용 가능'처럼 생성형 AI 로 만든 작품을
+# 받는다고 적은 문장을 찾는다. 찾은 문장 한 줄만 _기록.json 의 ai 에 적어 두고(없으면 빈 글) 다시 열지 않는다.
+# 본문이 그림(포스터)뿐인 공고와 정책브리핑(주최 측 사이트로 바로 감)은 읽지 못한다.
+
+AI_SRCS = ("씽굿", "콘테스트코리아", "링커리어", "위비티", "소통24")
+# 사이트별 공고 본문 자리(시작 표시, 끝 표시). 옆에 딸린 다른 공모전 목록·광고를 읽지 않으려는 것이다.
+BODY_CUT = {"씽굿": ('id="tab01"', 'id="tab02"'),
+            "위비티": ('id="viewContents"', 'class="event-notice'),
+            "콘테스트코리아": ('view_detail_area', 'class="list_style_2"'),
+            "링커리어": ('<article id="DETAIL"', 'ActivityDetailTabReport')}
+AIW = r"(?<![A-Za-z])(?:AI|A\.I\.|인공지능|에이아이)(?![A-Za-z])"
+AI_VERB = r"(?:활용|사용|이용|제작|생성|창작|작업|보정|도구|툴|프로그램|기술|기능)"
+# '지속가능'·'실현 가능성'·'구동 가능한'·'활용할 수 있는 분'·'허용 여부' 같은 말은 허용 표기가 아니다
+AI_OK = (r"(?:(?<!지속)가능(?!성|한)|허용(?!\s*여부)|무방|필수|OK|(?:할|하실)\s*수\s*있(?!는|도록|게)"
+         r"|(?:하여도|해도)\s*(?:됩|되|좋|무방))")
+AI_POS = re.compile(AIW + r".{0,30}?" + AI_VERB + r".{0,20}?" + AI_OK)             # 'AI 활용 가능', 'AI 는 보조 작업에 한하여 사용할 수 있'
+AI_POS2 = re.compile(r"생성형\s*" + AIW + r"\s*(?:툴|도구|프로그램)?\s*[를로을]?\s*(?:활용|이용|사용)(?:해|하여|한)\s*"
+                     r".{0,25}?(?:제작|표현|작업|작품|영상|이미지|콘텐츠)"
+                     r"|생성형\s*" + AIW + r"\s*(?:툴|도구|프로그램)?\s*(?:로|으로)\s*(?:제작|만든|만들|생성)"
+                     r"|" + AIW + r"\s*활용\s*부문")
+AI_NEG = re.compile(r"금지|불가|불허|제외|취소|감점|불이익|탈락|실격|무효|회수|환수|수\s*없|안\s*됩|않|결격|표절|지양|삼가|박탈|여부|문의|요청|제출")
+AI_SKIP = re.compile(r"누구나|관심|파일|확장자|형식|포맷|일러스트|PSD|EPS|PDF|JPG|PNG", re.I)   # 참가 자격 문장, 'AI 파일'(일러스트레이터)
+AI_MADE = (r"(?:영상|숏폼|쇼츠|광고|콘텐츠|미디어|웹툰|캐릭터|음악|뮤직|뮤비|아트|이미지|그림|영화|필름|창작|크리에이|패션|"
+           r"포스터|사진|동화|웹드라마|애니|작곡|디자인)")
+AI_TITLE = re.compile(r"(?<![A-Za-z])AI(?![A-Za-z])\s?(?:활용\s?\S{0,6}\s?|게임\s?)?" + AI_MADE
+                      + r"|(?<![A-Za-z])AI\s+(?:Music|Video|Film|Art)\b", re.I)
+AI_TITLE_NOTE = "제목으로 보아 AI로 만든 작품을 받는 공모전"
+
+
+def body_text(src, t):
+    """상세 화면에서 공고 본문만 잘라 글자로 바꾼다. 줄이 바뀌는 자리는 ¶ 로 남긴다."""
+    if src == "소통24":
+        m = re.search(r'property="og:description"\s+content="([^"]*)"', t)
+        return clean(m.group(1)) if m else ""
+    start, stop = BODY_CUT[src]
+    i = t.find(start)
+    if i < 0:
+        return ""
+    j = t.find(stop, i)
+    seg = "<x " + t[i:j if j > 0 else i + 80000]
+    seg = re.sub(r"<(script|style)\b.*?</\1>", " ", seg, flags=re.S | re.I)
+    seg = re.sub(r"<(?:br|/p|/div|/li|/tr|/h\d)\b[^>]*>", " ¶ ", seg, flags=re.I)
+    return clean(seg)
+
+
+def ai_note(text):
+    """AI 사용을 허용한다고 적은 문장을 찾아 한 줄(110자까지)로 돌려준다. 없으면 빈 글."""
+    for clause in re.split(r"¶|(?<=[.!?。])\s+|\s[-–•⦁●■□○◦※▶▷◆◇*]\s?", text):
+        clause = clause.strip(" -–·:,")
+        if len(clause) < 6:
+            continue
+        hit = None
+        for m in AI_POS.finditer(clause):
+            near = clause[max(0, m.start() - 14):m.end() + 6]
+            if not AI_NEG.search(m.group(0)) and not AI_SKIP.search(near):
+                hit = m
+                break
+        if hit is None and not AI_NEG.search(clause) and not AI_SKIP.search(clause):
+            hit = AI_POS2.search(clause)
+        if hit:
+            a = max(0, min(hit.start() - 30, len(clause) - 110))
+            return ("…" if a else "") + clause[a:a + 110].strip() + ("…" if len(clause) > a + 110 else "")
+    return ""
+
+
+def fetch_details(todo, homes, ais):
+    """todo = [(사이트, 상세 화면 주소)…]. 사이트마다 차례로(사이트끼리는 나란히) 한 번씩 열어
+    주최 측 주소는 homes 에, AI 사용 가능 문장은 ais 에 적는다."""
     by_src = {}
-    for src, url in todo:
+    for src, url in dict.fromkeys(todo):
         by_src.setdefault(src, []).append(url)
 
     def work(src):
-        s, out, bad = Session(), {}, 0
-        for url in by_src[src][:HOME_CAP]:
+        s, h, a, bad = Session(), {}, {}, 0
+        for url in by_src[src][:DETAIL_CAP]:
             try:
-                out[url] = home_from_detail(src, url, s)
+                t = s.text(url)
+                if src in DETAIL_ORDER and url not in homes:
+                    h[url] = home_from_page(src, t)
+                if src in AI_SRCS and url not in ais:
+                    a[url] = ai_note(body_text(src, t))
                 bad = 0
             except Exception:
                 bad += 1                       # 못 연 것은 적지 않는다 — 다음 실행 때 다시 해 본다
                 if bad >= 5:
                     break                      # 잇달아 막히면 그 사이트는 이번엔 그만둔다
-        return out
+        return h, a, len(by_src[src][:DETAIL_CAP])
 
     done = 0
     if by_src:
         with cf.ThreadPoolExecutor(max_workers=len(by_src)) as pool:
-            for res in pool.map(work, list(by_src)):
-                cache.update(res)
-                done += len(res)
+            results = list(pool.map(work, list(by_src)))
+        for h, a, n in results:
+            homes.update(h)
+            ais.update(a)
+            done += n
     return done
 
 
@@ -686,8 +759,9 @@ def guess_posted(nums, table):
     return None
 
 
-def merge(rows_by_src, first_seen, first_run, homes):
-    """homes = {상세 화면 주소: 주최 측 주소 또는 빈 글}. 돌려주는 todo 는 아직 열어 보지 않은 상세 화면들."""
+def merge(rows_by_src, first_seen, first_run, homes, ais):
+    """homes = {상세 화면 주소: 주최 측 주소 또는 빈 글}, ais = {상세 화면 주소: AI 사용 가능 문장 또는 빈 글}.
+    돌려주는 todo 는 아직 열어 보지 않은 상세 화면들."""
     merged, order, todo = {}, [], []
     for name, _, _ in SOURCES:
         for r in rows_by_src.get(name, []):
@@ -751,6 +825,20 @@ def merge(rows_by_src, first_seen, first_run, homes):
                     break
         if home:
             row["u"] = home
+
+        # AI 사용 가능 표기: 공고 본문에서 찾은 문장 → 없으면 제목('AI 영상 공모전' 같은 것)
+        ai = ""
+        for src, url in m["l"]:
+            if src not in AI_SRCS:
+                continue
+            if url not in ais:
+                todo.append((src, url))
+            elif ais[url] and not ai:
+                ai = ais[url]
+        if not ai and AI_TITLE.search(title):
+            ai = AI_TITLE_NOTE
+        if ai:
+            row["ai"] = ai
 
         # 올라온 날: 사이트가 알려 준 날 → 이 도구가 처음 본 날 → 이웃 번호로 어림 → 접수 시작일
         posted, rough = (parse_date(min(m["posted"])) if m["posted"] else None), False
@@ -857,14 +945,15 @@ def main(argv):
                           "count": len(rows_by_src[name])}
         report.append(done[name])
 
-    homes = state.get("home", {})
-    items, seen_now, todo = merge(rows_by_src, state.get("first_seen", {}), first_run, homes)
+    homes, ais = state.get("home", {}), state.get("ai", {})
+    items, seen_now, todo = merge(rows_by_src, state.get("first_seen", {}), first_run, homes, ais)
     if todo and not render_only and "--no-detail" not in argv:
         t0 = time.time()
-        got = fetch_homes(todo, homes)
-        items, seen_now, left = merge(rows_by_src, state.get("first_seen", {}), first_run, homes)
-        log(f"  주최 측 주소: 상세 화면 {got}건을 열어 봄 ({time.time() - t0:.0f}초) · 아직 안 열어 본 것 {len(left)}건")
-    log(f"  주최 측 주소를 아는 것 {sum(1 for x in items if x.get('u'))}건 / 모르는 것 {sum(1 for x in items if not x.get('u'))}건")
+        got = fetch_details(todo, homes, ais)
+        items, seen_now, left = merge(rows_by_src, state.get("first_seen", {}), first_run, homes, ais)
+        log(f"  상세 화면 {got}건을 열어 봄 ({time.time() - t0:.0f}초) · 아직 안 열어 본 것 {len(set(left))}건")
+    log(f"  주최 측 주소를 아는 것 {sum(1 for x in items if x.get('u'))}건 / 모르는 것 {sum(1 for x in items if not x.get('u'))}건"
+        f" / AI 사용 가능 표기 {sum(1 for x in items if x.get('ai'))}건")
     pub = sum(1 for x in items if x["p"])
     log(f"  공공 {pub}건 · 민간 {len(items) - pub}건 / 올라온 날: 확인 {sum(1 for x in items if x.get('d') and not x.get('dr'))}건"
         f" · 어림 {sum(1 for x in items if x.get('dr'))}건 · 모름 {sum(1 for x in items if not x.get('d'))}건"
@@ -890,7 +979,8 @@ def main(argv):
     if ok_count == len(SOURCES):          # 여섯 곳을 다 받았을 때만, 목록에서 사라진 공모전의 주소 기록을 지운다
         live = {u for rows in rows_by_src.values() for u in (r["url"] for r in rows)}
         homes = {k: v for k, v in homes.items() if k in live}
-    write_synced(STATE, json.dumps({"last_run": now, "first_seen": seen_now, "home": homes, "sources": cache},
+        ais = {k: v for k, v in ais.items() if k in live}
+    write_synced(STATE, json.dumps({"last_run": now, "first_seen": seen_now, "home": homes, "ai": ais, "sources": cache},
                                    ensure_ascii=False, separators=(",", ":")))
     log(f"완료 — 겹친 것을 합쳐 {len(items)}건, {os.path.basename(OUT)} 갱신")
     return 0
