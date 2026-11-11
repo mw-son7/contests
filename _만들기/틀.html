@@ -151,6 +151,13 @@ tbody tr:last-child td { border-bottom: 0; }
 tbody tr { transition: background var(--dur-fast) var(--ease); }
 tbody tr:hover { background: var(--parchment); }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* 관심 별표 — 빈 별(☆)을 누르면 찬 별(★)이 된다 */
+td.fav, th.fav { width: 44px; padding: 8px 0 8px 12px; }
+.star { width: 32px; height: 32px; padding: 0; border: 0; border-radius: var(--r-sm); background: none; font: inherit; font-size: 22px; line-height: 32px;
+  color: var(--ink-48); cursor: pointer; transition: transform var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+.star:hover { color: var(--blue); }
+.star:active { transform: scale(.85); }
+.star[aria-pressed="true"] { color: var(--blue); }
 td.date { white-space: nowrap; font-variant-numeric: tabular-nums; }
 td.name, td.host { overflow-wrap: anywhere; }
 td.name a.title { color: var(--ink); font-weight: 600; font-size: 16px; }
@@ -188,6 +195,7 @@ tr.no td.name a.title, tr.no td.host { color: var(--ink-48); }
   #rows-table, #rows-table tbody, #rows-table tr, #rows-table td { display: block; }
   #rows-table tr { padding: 16px 0; border-bottom: 1px solid var(--divider-soft); }
   #rows-table td { padding: 2px 0; border: 0; max-width: none; text-align: left; }
+  #rows-table td.fav { float: right; width: auto; padding: 0 0 0 8px; }
   #rows-table td.date::before { content: "올라온 날 "; color: var(--ink-muted); }
   #rows-table td.period::before { content: "접수 "; color: var(--ink-muted); }
   #rows-table td.num { margin-top: 6px; }
@@ -259,6 +267,10 @@ tr.no td.name a.title, tr.no td.host { color: var(--ink-48); }
         </div>
         <div class="filter-body">
           <div class="fsec">
+            <div class="fsec-head"><h3>관심 공모전</h3></div>
+            <div id="f-fav"></div>
+          </div>
+          <div class="fsec">
             <div class="fsec-head"><h3>참여 자격</h3><button type="button" class="linkbtn" id="me-toggle">내 조건 넣기</button></div>
             <div id="f-elig"></div>
             <div class="me" id="me-box" hidden>
@@ -317,7 +329,7 @@ tr.no td.name a.title, tr.no td.host { color: var(--ink-48); }
         </div>
         <div class="countline"><span id="count" aria-live="polite"></span><span>제목을 누르면 원문 공고가 새 창으로 열립니다.</span></div>
         <table id="rows-table">
-          <thead><tr><th scope="col">공모전</th><th scope="col">주최</th><th scope="col">올라온 날</th><th scope="col">접수 기간</th><th scope="col" class="num">남은 날</th><th scope="col">원문</th></tr></thead>
+          <thead><tr><th scope="col" class="fav"><span class="sr-only">관심</span></th><th scope="col">공모전</th><th scope="col">주최</th><th scope="col">올라온 날</th><th scope="col">접수 기간</th><th scope="col" class="num">남은 날</th><th scope="col">원문</th></tr></thead>
           <tbody id="rows"></tbody>
         </table>
         <div class="empty" id="empty" hidden>조건에 맞는 공모전이 없습니다. 검색어를 줄이거나 필터를 해제해 보세요.</div>
@@ -465,6 +477,20 @@ var DATA = /*__DATA__*/null;
     return no.length ? { v: 'no', why: no } : chk.length ? { v: 'check', why: chk } : { v: 'ok', why: [] };
   }
 
+  // ── 관심 공모전(별표) ──
+  // 별표 한 공모전의 이름표를 이 브라우저에만 적어 둔다. 날마다 목록을 새로 받아도 이름이 같으면 별표가 남는다.
+  var FAV = load('contest-fav');
+  if (!Array.isArray(FAV)) FAV = [];
+  function favKey(title) { return title.toLowerCase().replace(/[^0-9a-z가-힣]/g, ''); }
+  function isFav(x) { return FAV.indexOf(x.id) >= 0; }
+  function setFav(x, on) {
+    var i = FAV.indexOf(x.id);
+    if (on && i < 0) FAV.push(x.id);
+    if (!on && i >= 0) FAV.splice(i, 1);
+    if (FAV.length > 1000) FAV = FAV.slice(-1000);
+    store('contest-fav', FAV);
+  }
+
   // ── 자료 다듬기: 이미 마감된 것은 빼고, 남은 날을 오늘 기준으로 다시 센다 ──
   var ALL = [];
   DATA.items.forEach(function (it) {
@@ -472,6 +498,7 @@ var DATA = /*__DATA__*/null;
     var left = days(e);
     if (left != null && left < 0) return;
     ALL.push({
+      id: favKey(it.t),
       t: it.t, h: it.h || '', f: it.f || ['기타'], l: it.l || [], pub: !!it.p,
       w: it.w || [], rg: it.rg || null, rx: !!it.rx, a: it.a || null, y: !!it.y, pb: !!it.pb, q: it.q || '',
       e: e, s: s, d: d, rough: !!it.dr, left: left,
@@ -526,9 +553,10 @@ var DATA = /*__DATA__*/null;
   });
 
   // ── 조건 ──
-  var state = { q: '', sort: 'soon', status: 'all', elig: 'all', fields: [], srcs: [] };
+  var state = { q: '', sort: 'soon', status: 'all', elig: 'all', fav: false, fields: [], srcs: [] };
   var saved = load('contest-filter');
-  if (saved) ['sort', 'status', 'elig', 'fields', 'srcs'].forEach(function (k) { if (saved[k] != null) state[k] = saved[k]; });
+  if (saved) ['sort', 'status', 'elig', 'fav', 'fields', 'srcs'].forEach(function (k) { if (saved[k] != null) state[k] = saved[k]; });
+  state.fav = state.fav === true;
   var STATUS = [['all', '전체'], ['soon', '7일 안에 마감'], ['new', '최근 3일 사이 올라옴'], ['yet', '접수 예정']];
   var ELIG = [['all', '전체'], ['ok', '참여 가능만'], ['okcheck', '확인 필요까지']];
   var srcNames = DATA.sources.map(function (s) { return s.name; });
@@ -561,7 +589,11 @@ var DATA = /*__DATA__*/null;
   }
   function buildFilter() {
     var focused = document.activeElement && document.activeElement.getAttribute && document.activeElement.getAttribute('data-key');
-    var box = $('f-elig'); box.textContent = '';
+    var box = $('f-fav'); box.textContent = '';
+    box.appendChild(optRow('checkbox', 'fav', 'on', '★ 별표 한 공모전만', items.filter(isFav).length, state.fav, false,
+      function () { state.fav = !state.fav; refresh(); }));
+
+    box = $('f-elig'); box.textContent = '';
     ELIG.forEach(function (s) {
       var c = !ME && s[0] !== 'all' ? null : items.filter(function (x) { return eligPass(x, s[0]); }).length;
       box.appendChild(optRow('radio', 'elig', s[0], s[1], c, state.elig === s[0], !ME && s[0] !== 'all',
@@ -596,6 +628,7 @@ var DATA = /*__DATA__*/null;
   function filtered() {
     var words = state.q.toLowerCase().split(/\s+/).filter(Boolean);
     var out = items.filter(function (x) {
+      if (state.fav && !isFav(x)) return false;
       if (!eligPass(x, state.elig)) return false;
       if (!statusPass(x, state.status)) return false;
       if (state.fields.length && !state.fields.some(function (f) { return x.f.indexOf(f) >= 0; })) return false;
@@ -632,6 +665,22 @@ var DATA = /*__DATA__*/null;
   var VERDICT = { ok: ['chip success', '참여 가능'], check: ['chip warning', '확인 필요'], no: ['chip', '참여 불가'] };
   function row(x) {
     var tr = el('tr', x.j && x.j.v === 'no' ? 'no' : '');
+    var favTd = el('td', 'fav'), star = el('button', 'star');
+    star.type = 'button';
+    function paintStar() {
+      var on = isFav(x);
+      star.textContent = on ? '★' : '☆';
+      star.setAttribute('aria-pressed', on ? 'true' : 'false');
+      star.title = on ? '관심 공모전에서 빼기' : '관심 공모전에 넣기';
+      star.setAttribute('aria-label', star.title + ': ' + x.t);
+    }
+    paintStar();
+    star.addEventListener('click', function () {
+      setFav(x, !isFav(x));
+      if (state.fav) { current = filtered(); draw(); } else paintStar();     // 별표만 보는 중에 별을 빼면 그 줄이 목록에서 빠진다
+      buildFilter();
+    });
+    favTd.appendChild(star); tr.appendChild(favTd);
     var name = el('td', 'name');
     var a = el('a', 'title', x.t);
     a.href = safeUrl(x.l[0] && x.l[0][1]); a.target = '_blank'; a.rel = 'noopener noreferrer';
@@ -673,6 +722,9 @@ var DATA = /*__DATA__*/null;
     c.appendChild(document.createTextNode('조건에 맞는 공모전 '));
     c.appendChild(el('b', '', num(current.length) + '건'));
     c.appendChild(document.createTextNode(current.length ? ' 가운데 ' + num(n) + '건을 보여 줍니다.' : ''));
+    $('empty').textContent = state.fav && !items.some(isFav)
+      ? '별표 한 공모전이 없습니다. 필터의 \'별표 한 공모전만\'을 끄고, 목록에서 ☆를 눌러 관심 공모전으로 넣어 보세요.'
+      : '조건에 맞는 공모전이 없습니다. 검색어를 줄이거나 필터를 해제해 보세요.';
     $('empty').hidden = current.length > 0;
     $('rows-table').hidden = current.length === 0;
     $('more').hidden = shown >= current.length;
@@ -680,7 +732,7 @@ var DATA = /*__DATA__*/null;
   }
   function refresh() {
     shown = PAGE; current = filtered(); buildFilter(); draw();
-    store('contest-filter', { sort: state.sort, status: state.status, elig: state.elig, fields: state.fields, srcs: state.srcs });
+    store('contest-filter', { sort: state.sort, status: state.status, elig: state.elig, fav: state.fav, fields: state.fields, srcs: state.srcs });
   }
   function drawStats() {
     countUp($('st-all'), items.length);
@@ -721,7 +773,7 @@ var DATA = /*__DATA__*/null;
   $('sort').addEventListener('change', function () { state.sort = this.value; refresh(); });
   $('more').addEventListener('click', function () { shown += PAGE; draw(); });
   $('reset').addEventListener('click', function () {
-    state.q = ''; state.status = 'all'; state.elig = 'all'; state.fields = []; state.srcs = []; $('q').value = ''; refresh();
+    state.q = ''; state.status = 'all'; state.elig = 'all'; state.fav = false; state.fields = []; state.srcs = []; $('q').value = ''; refresh();
   });
   $('me-toggle').addEventListener('click', function () { $('me-box').hidden = !$('me-box').hidden; });
   Array.prototype.forEach.call(document.querySelectorAll('[data-clear]'), function (b) {
