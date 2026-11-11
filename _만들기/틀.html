@@ -434,6 +434,26 @@ var DATA = /*__DATA__*/null;
     return;
   }
 
+  // ── 옛 화면 붙들림 막기 ──
+  // 브라우저는 한 번 받은 화면을 10분쯤 보관한다. 서버의 판 번호(version.txt)가 내 것과 다르면 새 화면을 불러온다.
+  // 주소에 ?v=판번호 를 붙여 부르면 보관해 둔 것을 쓰지 않는다. 같은 판 번호로는 한 번만 다시 부른다(되풀이 방지).
+  (function () {
+    var asked = /[?&]v=([^&#]*)/.exec(location.search);
+    asked = asked ? decodeURIComponent(asked[1]) : '';
+    if (location.protocol === 'file:' || !DATA.build || !window.fetch) return;
+    if (asked && asked === DATA.build) {        // 새 화면을 받았으면 주소를 다시 깔끔하게
+      try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) {}
+    }
+    fetch('version.txt?t=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.text() : ''; })
+      .then(function (v) {
+        v = (v || '').trim();
+        if (!v || v === DATA.build || v === asked || !/^[\w-]{6,40}$/.test(v)) return;
+        location.replace(location.pathname + '?v=' + encodeURIComponent(v) + location.hash);
+      })
+      .catch(function () {});
+  })();
+
   // ── 내 조건 ──
   // 주소 끝에 #me=신분,공공재직(0·1),시도,생년월일 이 붙어 오면 한 번 저장하고 주소에서 지운다.
   // (# 뒤의 글은 서버로 가지 않는다. 지우는 것은 주소를 복사해 남에게 보낼 때 딸려 가지 않게 하려는 것이다.)
