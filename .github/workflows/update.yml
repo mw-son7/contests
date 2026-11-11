@@ -28,7 +28,11 @@ jobs:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
+      # 실행이 시작된 순간의 판이 아니라 지금의 최신 판을 내려받는다.
+      # (파일을 올리자마자 실행시키면 바로 전 판으로 시작되는 일이 있었다 — 2026-11-11)
       - uses: actions/checkout@v7
+        with:
+          ref: main
 
       - name: 여섯 사이트에서 목록 받기
         run: python3 _만들기/collect.py
@@ -42,7 +46,12 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git diff --cached --quiet || git commit -m "목록 갱신 $(date +%F)"
-          git push
+          # 수집하는 사이에 저장소가 바뀌었으면(PC 에서 파일을 올린 경우) 그 위에 얹어서 저장한다. 세 번까지 다시 해 본다.
+          for i in 1 2 3; do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            sleep 5
+          done
+          exit 1
 
       - name: 웹에 올릴 꾸러미 만들기
         run: |
