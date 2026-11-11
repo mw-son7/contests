@@ -104,42 +104,64 @@ def end_from_dday(text):
     return None
 
 
-def item(src, title, url, host="", cats="", target="", start=None, end=None):
-    return {"src": src, "title": clean(title), "url": url, "host": clean(host),
-            "cats": clean(cats), "target": clean(target), "start": iso(start), "end": iso(end)}
+def item(src, title, url, host="", cats="", target="", start=None, end=None,
+         posted=None, note="", horg="", num=None):
+    """한 건. target=응모 대상(사이트 표기 그대로), note=자격 덧말, horg=주최 분류, posted=사이트에 올라온 날,
+    num=사이트 안 일련번호(올라온 날을 모를 때 이웃 번호로 어림하는 데 쓴다)."""
+    d = {"src": src, "title": clean(title), "url": url, "host": clean(host),
+         "cats": clean(cats), "target": clean(target), "start": iso(start), "end": iso(end)}
+    if posted:
+        d["posted"] = iso(posted)
+    if note:
+        d["note"] = clean(note)[:160]
+    if horg:
+        d["horg"] = clean(horg)
+    if num:
+        d["num"] = int(num)
+    return d
 
 
 # ───────────────────────── 사이트별 수집 ─────────────────────────
 
 def wevity():
-    """위비티 — 전체 공모전 목록. 접수 중인 것이 앞쪽에, 마감된 것이 뒤쪽에 온다."""
-    s, out, seen = Session(), [], set()
-    for gp in range(1, 81):
-        t = s.text(f"https://www.wevity.com/?c=find&s=1&gub=1&gp={gp}")
-        got = open_cnt = 0
-        for b in t.split('<div class="tit">')[1:]:
-            m = re.search(r'<a href="[^"]*?ix=(\d+)"[^>]*>(.*?)</a>', b, re.S)
-            st = re.search(r'class="dday \w+">([^<]+)<', b)
-            if not m or not st:
-                continue
-            got += 1
-            if "마감" == clean(st.group(1)):
-                continue
-            open_cnt += 1
-            ix = m.group(1)
-            if ix in seen:
-                continue
-            seen.add(ix)
-            day = re.search(r'<div class="day">(.*?)</div>', b, re.S)
-            cats = re.search(r'분야 : (.*?)</div>', b, re.S)
-            organ = re.search(r'<div class="organ">(.*?)</div>', b, re.S)
-            out.append(item("위비티", re.sub(r"<span.*?</span>", "", m.group(2), flags=re.S),
-                            f"https://www.wevity.com/?c=find&s=1&gub=1&gbn=view&ix={ix}",
-                            host=organ.group(1) if organ else "",
-                            cats=cats.group(1) if cats else "",
-                            end=end_from_dday(clean(day.group(1)) if day else "")))
-        if got == 0 or open_cnt == 0:
-            break
+    """위비티 — 전체 목록을 받고, 응모 대상별 목록을 한 번씩 더 돌아 누가 낼 수 있는지 표시한다.
+    어느 목록이든 접수 중인 것이 앞쪽에, 마감된 것이 뒤쪽에 온다."""
+    s, found = Session(), {}
+    lists = [("1", "", "")] + [("2", cidx, who) for cidx, who in
+                               (("32", "누구나"), ("4", "일반인"), ("5", "대학생"),
+                                ("30", "청소년"), ("31", "어린이"), ("90", "기타"))]
+    for gub, cidx, who in lists:
+        for gp in range(1, 81):
+            t = s.text(f"https://www.wevity.com/?c=find&s=1&gub={gub}"
+                       + (f"&cidx={cidx}" if cidx else "") + f"&gp={gp}")
+            got = open_cnt = 0
+            for b in t.split('<div class="tit">')[1:]:
+                m = re.search(r'<a href="[^"]*?ix=(\d+)"[^>]*>(.*?)</a>', b, re.S)
+                st = re.search(r'class="dday \w+">([^<]+)<', b)
+                if not m or not st:
+                    continue
+                got += 1
+                if "마감" == clean(st.group(1)):
+                    continue
+                open_cnt += 1
+                ix = m.group(1)
+                if ix not in found:
+                    day = re.search(r'<div class="day">(.*?)</div>', b, re.S)
+                    cats = re.search(r'분야 : (.*?)</div>', b, re.S)
+                    organ = re.search(r'<div class="organ">(.*?)</div>', b, re.S)
+                    found[ix] = [item("위비티", re.sub(r"<span.*?</span>", "", m.group(2), flags=re.S),
+                                      f"https://www.wevity.com/?c=find&s=1&gub=1&gbn=view&ix={ix}",
+                                      host=organ.group(1) if organ else "",
+                                      cats=cats.group(1) if cats else "",
+                                      end=end_from_dday(clean(day.group(1)) if day else ""), num=ix), []]
+                if who and who not in found[ix][1]:
+                    found[ix][1].append(who)
+            if got == 0 or open_cnt == 0:
+                break
+    out = []
+    for row, whos in found.values():
+        row["target"] = ", ".join(whos)
+        out.append(row)
     return out
 
 
@@ -168,7 +190,11 @@ def thinkcontest():
                                 f"https://www.thinkcontest.com/thinkgood/user/{kind}/view.do?contest_pk={pk}",
                                 host=x.get("host_company"), cats=x.get("contest_field_nm"),
                                 target=x.get("enter_qualified_nm"),
-                                start=parse_date(x.get("accept_dt")), end=parse_date(x.get("finish_dt"))))
+                                start=parse_date(x.get("accept_dt")), end=parse_date(x.get("finish_dt")),
+                                posted=parse_date(x.get("putup_sdt")), horg=x.get("host_organ_nm"),
+                                note=" / ".join(v.strip() for v in (x.get("enter_qualified_limit"),
+                                                                     x.get("enter_qualified_etc"))
+                                                if v and v.strip())))
             if not rows or page * 10 >= int(res.get("totalcnt") or 0):
                 break
     return out
@@ -192,7 +218,7 @@ def linkareer():
             close = a.get("recruitCloseAt")
             end = dt.datetime.fromtimestamp(close / 1000, KST).date() if close else None
             out.append(item("링커리어", a.get("title"), f"https://linkareer.com/activity/{a['id']}",
-                            host=a.get("organizationName"), end=end))
+                            host=a.get("organizationName"), end=end, num=a["id"]))
         if not nodes or page * 20 >= int((conn or {}).get("totalCount") or 0):
             break
     return out
@@ -313,7 +339,8 @@ def contestkorea():
                             host=host.group(1) if host else "",
                             cats=", ".join(clean(c) for c in re.findall(r'<span class="category">(.*?)</span>', b, re.S)),
                             target=re.sub(r"\s*,\s*", ", ", clean(target.group(1))) if target else "",
-                            start=start, end=end))
+                            start=start, end=end, posted=parse_date(m.group(2)[:4] + "-" + m.group(2)[4:6]
+                                                                    + "-" + m.group(2)[6:8])))
         if got == 0 or open_cnt == 0:
             break
     return out
@@ -356,14 +383,171 @@ def fields_of(cats, title):
     return found or ["기타"]
 
 
-def short_target(text):
-    """응모 대상을 짧게. '제한 없음'·'누구나'가 들어 있으면 그 한마디로 줄인다."""
-    if not text:
-        return ""
-    if re.search(r"제한\s*없음|누구나", text):
-        return "누구나"
-    parts = [p.strip() for p in text.split(",") if p.strip() and p.strip() != "기타"]
-    return ", ".join(dict.fromkeys(parts))[:60]
+# ───────────────────────── 응모 자격 읽기 ─────────────────────────
+# 화면의 '내 조건으로 거르기'가 쓰는 재료를 만든다. 판정은 화면(브라우저)이 한다 —
+# 보는 사람의 조건(신분·사는 곳·생년월일)은 그 사람 브라우저에만 있고 여기로 오지 않는다.
+
+WHO = [("누구나", r"제한\s*없음|누구나"), ("어린이", r"어린이|유치원|유아"), ("초등", r"초등"),
+       ("중등", r"중학"), ("고등", r"고등|고교"), ("청소년", r"청소년"), ("대학원생", r"대학원"),
+       ("대학생", r"대학생"), ("일반인", r"일반인"), ("기업", r"기업"), ("외국인", r"외국인"), ("기타", r"기타")]
+WHO_RE = [(name, re.compile(pat)) for name, pat in WHO]
+
+
+def who_tokens(target, title):
+    """응모 대상 표기를 공통 낱말로. 사이트가 대상을 안 알려 주면 제목에서 짐작한다."""
+    got = [name for name, rx in WHO_RE if rx.search(target or "")]
+    if got and got != ["기타"]:
+        return got
+    if re.search(r"대학\(?원?\)?생", title):
+        return ["대학생", "대학원생"]
+    if re.search(r"청소년|고교생|고등학생|중학생|중·?고등?학생", title):
+        return ["중등", "고등", "청소년"]
+    if re.search(r"어린이|초등학생|유아|유치원", title):
+        return ["어린이", "초등"]
+    return got
+
+
+SIDO = ["서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종", "경기", "강원",
+        "충북", "충남", "전북", "전남", "경북", "경남", "제주"]
+SIDO_LONG = {"서울특별시": "서울", "서울시": "서울", "부산광역시": "부산", "부산시": "부산", "대구광역시": "대구",
+             "대구시": "대구", "인천광역시": "인천", "인천시": "인천", "광주광역시": "광주", "대전광역시": "대전",
+             "대전시": "대전", "울산광역시": "울산", "울산시": "울산", "세종특별자치시": "세종", "세종시": "세종",
+             "경기도": "경기", "강원특별자치도": "강원", "강원도": "강원", "충청북도": "충북", "충청남도": "충남",
+             "전북특별자치도": "전북", "전라북도": "전북", "전라남도": "전남", "경상북도": "경북", "경상남도": "경남",
+             "제주특별자치도": "제주", "제주도": "제주"}
+# 시·군·구 이름(뒤에 시·군·구가 붙었을 때만 지역으로 본다 — '예산', '고령', '연수' 같은 보통 낱말과 겹치기 때문)
+SIGUNGU = {
+    "서울": "종로 용산 성동 광진 동대문 중랑 성북 강북 도봉 노원 은평 서대문 마포 양천 구로 금천 영등포 동작 관악 서초 강남 송파 강동",
+    "부산": "해운대 기장 사하 사상 금정 연제 영도 동래 부산진 수영",
+    "대구": "달서 수성 달성 군위",
+    "인천": "강화 옹진 부평 계양 미추홀 연수 남동",
+    "광주": "광산", "대전": "유성 대덕", "울산": "울주",
+    "경기": "수원 성남 의정부 안양 부천 광명 평택 동두천 안산 고양 과천 구리 남양주 오산 시흥 군포 의왕 하남 용인 "
+            "파주 이천 안성 김포 화성 양주 포천 여주 연천 가평 양평",
+    "강원": "춘천 원주 강릉 동해 태백 속초 삼척 홍천 횡성 영월 평창 정선 철원 화천 양구 인제 양양",
+    "충북": "청주 충주 제천 보은 옥천 영동 증평 진천 괴산 음성 단양",
+    "충남": "천안 공주 보령 아산 서산 논산 계룡 당진 금산 부여 서천 청양 홍성 예산 태안",
+    "전북": "전주 군산 익산 정읍 남원 김제 완주 진안 무주 장수 임실 순창 고창 부안",
+    "전남": "목포 여수 순천 나주 광양 담양 곡성 구례 고흥 보성 화순 장흥 강진 해남 영암 무안 함평 영광 장성 완도 진도 신안",
+    "경북": "포항 경주 김천 안동 구미 영주 영천 상주 문경 경산 의성 청송 영양 영덕 청도 고령 성주 칠곡 예천 봉화 울진 울릉",
+    "경남": "창원 진주 통영 사천 김해 밀양 거제 양산 의령 함안 창녕 남해 하동 산청 함양 거창 합천",
+    "제주": "서귀포",
+}
+SGG = {name: sido for sido, names in SIGUNGU.items() for name in names.split()}
+SGG_RE = re.compile("(" + "|".join(sorted(SGG, key=len, reverse=True)) + ")(?=시|군|구)")
+SIDO_RE = re.compile("|".join(sorted(SIDO_LONG, key=len, reverse=True))
+                     + "|" + "|".join(s for s in SIDO if s != "경기"))     # '경기'만으로는 운동 경기와 못 가린다
+LOCAL_CUE = re.compile(r"시민|도민|군민|구민|관내|거주|소재|주민|지역\s*제한")
+NOT_LOCAL = re.compile(r"^\s*(국내|전국|온라인|대한민국|해당\s*없음|없음)")
+
+
+def regions_in(text):
+    out = []
+    for m in SIDO_RE.finditer(text):
+        out.append(SIDO_LONG.get(m.group(0), m.group(0)))
+    for m in SGG_RE.finditer(text):
+        out.append(SGG[m.group(1)])
+    return list(dict.fromkeys(out))
+
+
+def region_rule(target, note, title, host):
+    """지역 제한이 있으면 (시·도 목록, 지역을 못 알아냈는가)를 돌려준다. 제한이 없으면 ([], False)."""
+    flagged = "지역 제한" in (target or "")
+    cue = LOCAL_CUE.search(note or "")
+    if not flagged and not cue:
+        # 제목의 '시민·도민'만으로는 단정하지 않는다('민주시민'·'세계시민'도 있다) — 확인 필요로만 둔다
+        return [], bool(re.search(r"시민|도민|군민|구민", title)) and not re.search(r"민주시민|세계시민|시민의식", title)
+    if not flagged and NOT_LOCAL.match(note or ""):
+        return [], False
+    for text in (note or "", title, host or ""):       # 자격 덧말 → 제목 → 주최 순으로 지역 이름을 찾는다
+        found = regions_in(text)
+        if found:
+            return found, False
+    return [], True
+
+
+def age_rule(text):
+    """'만 19~39세'·'만 14세 이상'·'34세 이하' → [가장 어린 나이, 가장 많은 나이]. 없으면 None."""
+    text = re.sub(r"[^.。/]*?(법정대리인|보호자|동의)[^.。/]*", " ", text)     # '만 14세 미만은 보호자 동의'는 제한이 아니다
+    lo, hi = None, None
+    m = re.search(r"(\d{1,2})\s*세?\s*[~\-–]\s*만?\s*(\d{1,2})\s*세(?!대)", text)
+    if m:
+        lo, hi = int(m.group(1)), int(m.group(2))
+    else:
+        m = re.search(r"(\d{1,2})\s*세\s*(이상|부터)", text)
+        if m:
+            lo = int(m.group(1))
+        m = re.search(r"(\d{1,2})\s*세\s*(이하|까지|미만)", text)
+        if m:
+            hi = int(m.group(1)) - (1 if m.group(2) == "미만" else 0)
+    if lo is None and hi is None:
+        if re.search(r"시니어|어르신|실버|노인|신중년", text):
+            return [50, 150]
+        return None
+    return [lo if lo is not None else 0, hi if hi is not None else 150]
+
+
+NOTE_STRICT = re.compile(r"회원|재학|휴학|임직원|교원|교사|종사자|소속|이용자|작가|전공|졸업|수료|경력|보유|등록|"
+                         r"사업자|단체|장애|여성|학부모|가족|유학생|장병|군인|동문|신인|보호자와")
+NOTE_OPEN = re.compile(r"누구나|국민|제한\s*없|관심\s*(이\s*)?있는|요강|홈페이지|참조|참고|상세|전국|모든|대한민국")
+TITLE_STRICT = re.compile(r"재학생|임직원|교원|교사|장병|유학생|여성|학부모|동문")
+PUBLIC_ONLY = re.compile(r"공무원|공직자|공공기관\s*(임|재)?직(원|자)|공공부문\s*종사자")
+
+
+def note_rule(note, title):
+    """자격 덧말에 따로 확인할 조건이 있으면 보여 줄 글을, 없으면 빈 글을 돌려준다."""
+    note = re.sub(r"[^/]*(법정대리인|보호자)\s*(의\s*)?동의[^/]*", "", note or "").strip(" /")
+    words = [w.strip() for w in re.split(r"[,/]", note) if w.strip()]
+    plain = {"누구나", "유치원", "어린이", "초등학생", "중학생", "고등학생", "청소년", "대학생", "대학원생",
+             "일반인", "외국인", "기업", "기타", "제한 없음", "제한없음"}
+    if words and all(w in plain for w in words):
+        note = ""                                   # 대상 낱말만 늘어놓은 덧말은 버린다
+    # 나이·지역처럼 따로 읽어 낸 조건만 적힌 덧말도 버린다('부산 거주', '만 34세 이하', '국내 거주')
+    rest = re.sub(r"만?\s*\d{1,2}\s*세?\s*[~\-–]\s*만?\s*\d{1,2}\s*세|만?\s*\d{1,2}\s*세\s*(이상|이하|미만|부터|까지)?", " ", note)
+    rest = SGG_RE.sub(" ", SIDO_RE.sub(" ", rest))
+    rest = re.sub(r"거주자?|국내|전국|온라인|누구나|시민|도민|군민|구민|[\s,./·()의및]", "", rest)
+    if len(rest) < 2:
+        note = ""
+    if note and (NOTE_STRICT.search(note) or not NOTE_OPEN.search(note)):
+        return note[:70]
+    m = TITLE_STRICT.search(title)
+    return f"제목에 '{m.group(0)}'" if m else ""
+
+
+# ───────────────────────── 공공·민간 가르기 ─────────────────────────
+# 공공 = 중앙부처·지방자치단체·교육청·공공기관·공기업이 여는 것. 그 밖(기업·언론·협회·학교·민간 재단)은 민간.
+
+PUB_HORG = re.compile(r"중앙정부|지방자치단체|공공기관|공기업")
+MINISTRY = ("교육부|과학기술정보통신부|외교부|통일부|법무부|국방부|행정안전부|국가보훈부|문화체육관광부|농림축산식품부|"
+            "산업통상자원부|산업통상부|보건복지부|환경부|기후에너지환경부|고용노동부|여성가족부|성평등가족부|국토교통부|"
+            "해양수산부|중소벤처기업부|기획재정부|재정경제부")
+PUB_TOKEN = re.compile(
+    r"^(" + MINISTRY + r")$"
+    r"|^[가-힣]{2,}(처|청)$"                                             # 법제처·산림청·시청·구청·교육청
+    r"|^(서울|부산|대구|인천|광주|대전|울산|세종)(특별|광역|특별자치)?시$"
+    r"|^(경기|강원|충청[남북]|전라[남북]|경상[남북]|제주|전북|강원특별자치|전북특별자치|제주특별자치)도$"
+    r"|^[가-힣]{1,4}(?<![도택표전게즉증])시$|^[가-힣]{1,4}(?<![장대해육공])군$"
+    r"|^[가-힣]{1,4}(?<![연가농야축배친기도지탁당])구$")
+PUB_WORD = re.compile(
+    r"공사$|공사[\s,/·(]|공단|진흥원|개발원|정보원|관리원|평가원|인재원|국립|시립|도립|군립|구립|경찰|소방|보건소|의회|"
+    r"우체국|우정사업|한국은행|교육청|교육지원청|한국전력|한전|코레일|건강보험|국민연금|근로복지|"
+    r"(시|군|구)(립)?(도서관|박물관|미술관|문화원)|"
+    r"(?<!조직)(?<!추진)(?<!집행)(?<!준비)위원회|"
+    r"\b(KOTRA|LH|LX|aT|KOICA|KISA|KISTI|KEIT|KSPO|KOBACO|KIAT|NIA|NIPA|KOCCA|KERIS|KTL)\b|"
+    r"(서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주|[가-힣]{2,3}(시|군|구))\S*재단")
+
+
+def is_public(srcs, horgs, hosts):
+    if "소통24" in srcs or "정책브리핑" in srcs:
+        return True
+    if any(PUB_HORG.search(h) for h in horgs):
+        return True
+    for host in hosts:
+        if PUB_WORD.search(host):
+            return True
+        if any(PUB_TOKEN.match(tok) for tok in re.split(r"[\s,/·()\[\]&]+", host) if tok):
+            return True
+    return False
 
 
 def norm(title):
@@ -414,6 +598,19 @@ def run_source(entry):
         return name, None, f"{type(e).__name__}: {e}", time.time() - t0
 
 
+def guess_posted(nums, table):
+    """올라온 날을 알려 주지 않는 사이트(위비티·링커리어)는 일련번호가 가까운 이웃들의 날짜로 어림한다.
+    table = {사이트: [(일련번호, 날짜 서수), …]} — 다른 사이트에도 올라와 날짜를 아는 것들."""
+    for src, num in nums.items():
+        pairs = table.get(src) or []
+        if len(pairs) < 8:
+            continue
+        near = sorted(pairs, key=lambda p: abs(p[0] - num))[:7]
+        days = sorted(d for _, d in near)
+        return dt.date.fromordinal(days[len(days) // 2])
+    return None
+
+
 def merge(rows_by_src, first_seen, first_run):
     merged, order = {}, []
     for name, _, _ in SOURCES:
@@ -426,31 +623,71 @@ def merge(rows_by_src, first_seen, first_run):
                 continue
             m = merged.get(key)
             if m is None:
-                m = {"t": r["title"], "h": r["host"], "c": r["cats"], "g": r["target"],
-                     "s": r["start"], "e": end, "l": []}
+                m = {"t": r["title"], "s": None, "e": None, "l": [], "hosts": [], "cats": [], "who": [],
+                     "notes": [], "horgs": [], "posted": [], "nums": {}}
                 merged[key] = m
                 order.append(key)
-            else:                             # 겹치는 공모전 — 비어 있는 칸만 채운다
-                m["h"] = m["h"] or r["host"]
-                m["c"] = (m["c"] + ", " + r["cats"]).strip(", ") if r["cats"] else m["c"]
-                m["g"] = m["g"] or r["target"]
-                m["s"] = m["s"] or r["start"]
-                m["e"] = m["e"] or end
+            m["s"] = m["s"] or r.get("start")          # 겹치는 공모전 — 비어 있는 칸만 채운다
+            m["e"] = m["e"] or end
+            for box, field in (("hosts", "host"), ("cats", "cats"), ("who", "target"), ("notes", "note"),
+                               ("horgs", "horg"), ("posted", "posted")):
+                if r.get(field) and r[field] not in m[box]:
+                    m[box].append(r[field])
+            if r.get("num"):
+                m["nums"].setdefault(name, r["num"])
             if not any(src == name for src, _ in m["l"]):
                 m["l"].append([name, r["url"]])
+
+    table = {}                                 # 올라온 날을 아는 것들로 '일련번호 → 날짜' 눈금을 만든다
+    for m in merged.values():
+        if m["posted"]:
+            day = parse_date(min(m["posted"])).toordinal()
+            for src, num in m["nums"].items():
+                table.setdefault(src, []).append((num, day))
+
     items, seen_now = [], {}
     for key in order:
         m = merged[key]
         seen = first_seen.get(key)
         if seen is None:
-            seen = "" if first_run else iso(TODAY)     # 첫 실행 때는 전부를 '새 글'로 치지 않는다
+            seen = "" if first_run else iso(TODAY)     # 첫 실행 때 이미 있던 것은 처음 본 날을 모른다
         seen_now[key] = seen
-        row = {"t": m["t"], "h": m["h"], "f": fields_of(m["c"], m["t"]), "s": m["s"], "e": m["e"], "l": m["l"]}
-        who = short_target(m["g"])
-        if who:
-            row["g"] = who
-        if seen:
-            row["n"] = seen
+        title, host = m["t"], (m["hosts"][0] if m["hosts"] else "")
+        target, note = ", ".join(m["who"]), " / ".join(m["notes"])
+        srcs = [src for src, _ in m["l"]]
+        row = {"t": title, "h": host, "f": fields_of(", ".join(m["cats"]), title), "s": m["s"], "e": m["e"],
+               "l": m["l"], "p": 1 if is_public(srcs, m["horgs"], m["hosts"]) else 0,
+               "w": who_tokens(target, title)}
+
+        # 올라온 날: 사이트가 알려 준 날 → 이 도구가 처음 본 날 → 이웃 번호로 어림 → 접수 시작일
+        posted, rough = (parse_date(min(m["posted"])) if m["posted"] else None), False
+        if posted is None and seen:
+            posted = parse_date(seen)
+        if posted is None:
+            posted, rough = guess_posted(m["nums"], table), True
+        if posted is None and m["s"] and m["s"] <= iso(TODAY):
+            posted, rough = parse_date(m["s"]), True
+        if posted:
+            row["d"] = iso(min(posted, TODAY))
+            if rough:
+                row["dr"] = 1
+
+        # 응모 자격 재료
+        rg, unknown = region_rule(target, note, title, host)
+        if rg:
+            row["rg"] = rg
+        elif unknown:
+            row["rx"] = 1
+        age = age_rule(title + " / " + note)
+        if age:
+            row["a"] = age
+        elif "청년" in title or "청년" in note:
+            row["y"] = 1
+        if PUBLIC_ONLY.search(title + " " + note):
+            row["pb"] = 1
+        q = note_rule(note, title)
+        if q:
+            row["q"] = q
         items.append(row)
     return items, seen_now
 
@@ -528,6 +765,10 @@ def main(argv):
         report.append(done[name])
 
     items, seen_now = merge(rows_by_src, state.get("first_seen", {}), first_run)
+    pub = sum(1 for x in items if x["p"])
+    log(f"  공공 {pub}건 · 민간 {len(items) - pub}건 / 올라온 날: 확인 {sum(1 for x in items if x.get('d') and not x.get('dr'))}건"
+        f" · 어림 {sum(1 for x in items if x.get('dr'))}건 · 모름 {sum(1 for x in items if not x.get('d'))}건"
+        f" / 대상 정보 없음 {sum(1 for x in items if not x['w'])}건")
     data = {"generated": now, "sources": report, "fields": [n for n, _ in FIELDS] + ["기타"], "items": items}
     with open(TEMPLATE, encoding="utf-8") as f:
         tpl = f.read()
