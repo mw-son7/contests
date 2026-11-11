@@ -325,6 +325,10 @@ tr.no td.name a.title, tr.no td.host { color: var(--ink-48); }
             </div>
           </div>
           <div class="fsec">
+            <div class="fsec-head"><h3>AI 사용</h3></div>
+            <div id="f-ai"></div>
+          </div>
+          <div class="fsec">
             <div class="fsec-head"><h3>상태</h3><button type="button" class="linkbtn" data-clear="status">해제</button></div>
             <div id="f-status"></div>
           </div>
@@ -387,6 +391,11 @@ tr.no td.name a.title, tr.no td.host { color: var(--ink-48); }
         <li>'참여 가능'은 사이트가 알려 준 응모 대상·지역 제한·나이 조건이 내 조건과 맞는 것입니다.</li>
         <li>'확인 필요'는 사이트가 대상을 알려 주지 않았거나, 따로 읽어 봐야 할 자격 조건이 붙은 것입니다. 링커리어·소통24·정책브리핑에만 올라온 공모전은 대상 정보가 없어 대부분 여기에 듭니다.</li>
         <li>'참여 불가'는 대상·지역·나이 가운데 하나가 내 조건과 맞지 않는 것입니다. 기계가 글자를 보고 가린 것이므로 틀릴 수 있습니다.</li>
+      </ul>
+      <h3>AI 사용 가능 표기</h3>
+      <ul>
+        <li>모음 사이트에 실린 공고 본문에서 'AI 활용 가능'처럼 생성형 AI로 만든 작품을 받는다고 적은 문장을 찾아 표시합니다. 찾은 문장을 공모전 이름 아래에 함께 보여 줍니다. 제목이 'AI 영상 공모전'처럼 AI로 만든 작품을 받는 공모전도 넣었습니다.</li>
+        <li>일부만 허용하거나 조건(사용 내역 기재, 보조 작업만 허용 등)이 붙은 것도 들어 있으므로 문장을 읽어 확인하십시오. 공고 본문이 그림(포스터)뿐이거나 정책브리핑에만 올라온 공모전은 읽지 못합니다. 표시가 없다고 해서 AI 사용이 금지된 것은 아닙니다.</li>
       </ul>
       <h3>올라온 날</h3>
       <ul>
@@ -549,7 +558,7 @@ var DATA = /*__DATA__*/null;
     var left = days(e);
     if (left != null && left < 0) return;
     ALL.push({
-      id: favKey(it.t), u: it.u || '',
+      id: favKey(it.t), u: it.u || '', ai: it.ai || '',
       t: it.t, h: it.h || '', f: it.f || ['기타'], l: it.l || [], pub: !!it.p,
       w: it.w || [], rg: it.rg || null, rx: !!it.rx, a: it.a || null, y: !!it.y, pb: !!it.pb, q: it.q || '',
       e: e, s: s, d: d, rough: !!it.dr, left: left,
@@ -604,10 +613,11 @@ var DATA = /*__DATA__*/null;
   });
 
   // ── 조건 ──
-  var state = { q: '', sort: 'soon', status: 'all', elig: 'all', fav: false, fields: [], srcs: [] };
+  var state = { q: '', sort: 'soon', status: 'all', elig: 'all', fav: false, ai: false, fields: [], srcs: [] };
   var saved = load('contest-filter');
-  if (saved) ['sort', 'status', 'elig', 'fav', 'fields', 'srcs'].forEach(function (k) { if (saved[k] != null) state[k] = saved[k]; });
+  if (saved) ['sort', 'status', 'elig', 'fav', 'ai', 'fields', 'srcs'].forEach(function (k) { if (saved[k] != null) state[k] = saved[k]; });
   state.fav = state.fav === true;
+  state.ai = state.ai === true;
   var STATUS = [['all', '전체'], ['soon', '7일 안에 마감'], ['new', '최근 3일 사이 올라옴'], ['yet', '접수 예정']];
   var ELIG = [['all', '전체'], ['ok', '참여 가능만'], ['okcheck', '확인 필요까지']];
   var srcNames = DATA.sources.map(function (s) { return s.name; });
@@ -652,6 +662,10 @@ var DATA = /*__DATA__*/null;
     });
     $('me-toggle').textContent = ME ? '내 조건 고치기' : '내 조건 넣기';
 
+    box = $('f-ai'); box.textContent = '';
+    box.appendChild(optRow('checkbox', 'ai', 'on', 'AI 사용 가능 표기만', items.filter(function (x) { return x.ai; }).length, state.ai, false,
+      function () { state.ai = !state.ai; refresh(); }));
+
     box = $('f-status'); box.textContent = '';
     STATUS.forEach(function (s) {
       box.appendChild(optRow('radio', 'status', s[0], s[1], items.filter(function (x) { return statusPass(x, s[0]); }).length,
@@ -680,6 +694,7 @@ var DATA = /*__DATA__*/null;
     var words = state.q.toLowerCase().split(/\s+/).filter(Boolean);
     var out = items.filter(function (x) {
       if (state.fav && !isFav(x)) return false;
+      if (state.ai && !x.ai) return false;
       if (!eligPass(x, state.elig)) return false;
       if (!statusPass(x, state.status)) return false;
       if (state.fields.length && !state.fields.some(function (f) { return x.f.indexOf(f) >= 0; })) return false;
@@ -740,8 +755,10 @@ var DATA = /*__DATA__*/null;
     var tags = el('div', 'tags');
     if (x.j) tags.appendChild(el('span', VERDICT[x.j.v][0], VERDICT[x.j.v][1]));
     if (x.isNew) tags.appendChild(el('span', 'chip info', '새 글'));
+    if (x.ai) tags.appendChild(el('span', 'chip info', 'AI 사용 가능'));
     x.f.forEach(function (f) { tags.appendChild(el('span', 'chip', f)); });
     name.appendChild(tags);
+    if (x.ai) name.appendChild(el('span', 'sub', 'AI 안내: ' + x.ai));
     var who = whoText(x.w), line = [];
     if (who) line.push('대상: ' + who);
     if (x.rg) line.push(x.rg.join('·') + ' 지역 제한');
@@ -817,7 +834,7 @@ var DATA = /*__DATA__*/null;
   }
   function refresh() {
     page = 1; current = filtered(); buildFilter(); draw();
-    store('contest-filter', { sort: state.sort, status: state.status, elig: state.elig, fav: state.fav, fields: state.fields, srcs: state.srcs });
+    store('contest-filter', { sort: state.sort, status: state.status, elig: state.elig, fav: state.fav, ai: state.ai, fields: state.fields, srcs: state.srcs });
   }
   function drawStats() {
     countUp($('st-all'), items.length);
@@ -857,7 +874,7 @@ var DATA = /*__DATA__*/null;
   $('sort').value = state.sort;
   $('sort').addEventListener('change', function () { state.sort = this.value; refresh(); });
   $('reset').addEventListener('click', function () {
-    state.q = ''; state.status = 'all'; state.elig = 'all'; state.fav = false; state.fields = []; state.srcs = []; $('q').value = ''; refresh();
+    state.q = ''; state.status = 'all'; state.elig = 'all'; state.fav = false; state.ai = false; state.fields = []; state.srcs = []; $('q').value = ''; refresh();
   });
   $('me-toggle').addEventListener('click', function () { $('me-box').hidden = !$('me-box').hidden; });
   Array.prototype.forEach.call(document.querySelectorAll('[data-clear]'), function (b) {
