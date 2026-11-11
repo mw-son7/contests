@@ -395,7 +395,7 @@ var DATA = /*__DATA__*/null;
 (function () {
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
-  var DAY = 86400000, PAGE = 50, WEB = 'https://mw-son7.github.io/contests/';
+  var DAY = 86400000, PAGE = 50, BLOCK = 10, WEB = 'https://mw-son7.github.io/contests/';
   var SIDO = ['서울', '부산', '대구', '인천', '광주', '대전', '울산', '세종', '경기', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주'];
   var JOBS = { worker: ['일반인'], univ: ['대학생'], grad: ['대학원생'], high: ['고등', '청소년'], mid: ['중등', '청소년'], elem: ['초등', '어린이'] };
   var WHO_LABEL = { '초등': '초등학생', '중등': '중학생', '고등': '고등학생' };
@@ -730,7 +730,7 @@ var DATA = /*__DATA__*/null;
     tr.appendChild(src);
     return tr;
   }
-  // 페이지 단추: 이전 · 1 … 4 5 [6] 7 8 … 17 · 다음, 그 아래에 '현재 6페이지 / 전체 17페이지'
+  // 페이지 단추: 처음 · 이전 · 1 2 … 10 · 다음 · 끝, 그 아래에 '현재 6페이지 / 전체 17페이지'
   function drawPager(pages) {
     var nav = $('pager'); nav.textContent = '';
     nav.hidden = current.length === 0;
@@ -744,15 +744,13 @@ var DATA = /*__DATA__*/null;
       else b.addEventListener('click', function () { goPage(target); });
       return b;
     }
-    nav.appendChild(button('이전', page - 1, '이전 페이지'));
-    var shownNums = [], last = 0;
-    for (var p = 1; p <= pages; p++) if (p === 1 || p === pages || Math.abs(p - page) <= 2) shownNums.push(p);
-    shownNums.forEach(function (p) {
-      if (p - last > 1) nav.appendChild(el('span', 'pg-gap', '…'));
-      nav.appendChild(button(String(p), p, null));
-      last = p;
-    });
-    nav.appendChild(button('다음', page + 1, '다음 페이지'));
+    // 번호는 열 페이지씩 묶는다(1~10, 11~20 …). '이전'·'다음'은 앞뒤 묶음으로 넘어간다.
+    var first = Math.floor((page - 1) / BLOCK) * BLOCK + 1, end = Math.min(first + BLOCK - 1, pages);
+    nav.appendChild(button('처음', page === 1 ? 0 : 1, '첫 페이지'));
+    nav.appendChild(button('이전', first - 1, '이전 ' + BLOCK + '페이지 묶음'));
+    for (var p = first; p <= end; p++) nav.appendChild(button(String(p), p, null));
+    nav.appendChild(button('다음', end + 1, '다음 ' + BLOCK + '페이지 묶음'));
+    nav.appendChild(button('끝', page === pages ? pages + 1 : pages, '마지막 페이지'));
     var info = el('p', 'pg-info');
     info.appendChild(document.createTextNode('현재 '));
     info.appendChild(el('b', '', num(page) + '페이지'));
