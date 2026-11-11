@@ -872,6 +872,10 @@ def main(argv):
         tpl = f.read()
     if "/*__DATA__*/null" not in tpl:
         raise RuntimeError("틀.html 에 자료를 끼울 자리(/*__DATA__*/null)가 없음")
+    # 판 번호 = 받은 때 + 화면 틀의 지문. 웹에서는 version.txt 로도 내보내, 브라우저가 옛 화면을 붙들고 있으면
+    # 화면이 스스로 알아채고 새로 불러오게 한다.
+    data["build"] = re.sub(r"\D", "", now) + "-" + hashlib.sha1(tpl.encode("utf-8")).hexdigest()[:8]
+    write_synced(os.path.join(ROOT, "version.txt"), data["build"] + "\n")
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
     write_synced(OUT, tpl.replace("/*__DATA__*/null", payload))
     if ok_count == len(SOURCES):          # 여섯 곳을 다 받았을 때만, 목록에서 사라진 공모전의 주소 기록을 지운다
