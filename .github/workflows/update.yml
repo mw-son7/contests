@@ -55,9 +55,11 @@ jobs:
 
       - name: 웹에 올릴 꾸러미 만들기
         run: |
-          mkdir _site
+          mkdir -p _site/m
           cp 공모전모음.html _site/index.html
           cp version.txt _site/version.txt      # 화면이 '내가 최신 판인가'를 견주어 보는 판 번호
+          cp 공모전모음_모바일.html _site/m/index.html      # 휴대폰용 화면은 /m/ 주소로
+          cp version.txt _site/m/version.txt
 
       - uses: actions/upload-pages-artifact@v5
         with:
