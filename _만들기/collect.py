@@ -12,6 +12,7 @@
 """
 import concurrent.futures as cf
 import datetime as dt
+import difflib
 import hashlib
 import html
 import http.cookiejar
@@ -19,6 +20,7 @@ import json
 import os
 import re
 import shutil
+import ssl
 import sys
 import tempfile
 import time
@@ -125,6 +127,44 @@ def host_url(u):
     except ValueError:
         return ""
     return u
+
+
+FORM_LINK = re.compile(r"forms\.gle|docs\.google\.com/forms|form\.naver\.com|naver\.me|bit\.ly|url\.kr|me2\.do|"
+                       r"tally\.so|typeform\.com|google\.com/forms|surveymonkey", re.I)
+LIST_WORD = re.compile(r"notice|board|bbs|news|list|community|gongji|press|공지|게시", re.I)
+
+
+NOT_ID_KEY = re.compile(r"page|menu|manage|top|sub|cate|size|limit|offset|sort|row|cp$|tab|lang|year|utm_", re.I)
+ID_KEY = re.compile(r"id|idx|no|num|seq|sn|pk|article|ntt|data|post|doc", re.I)
+FILE_LINK = re.compile(r"download|attach|filedown|file_?id|/files?/|\.(?:pdf|hwpx?|zip|docx?|xlsx?|pptx?|jpe?g|png)(?:$|\?)", re.I)
+
+
+def spec(u):
+    """주소가 얼마나 구체적인가. 3=공고 글·전용 화면(글 번호가 있음), 2=하위 화면, 1=게시판 목록, 0=대문."""
+    try:
+        p = urllib.parse.urlsplit(u)
+        pairs = [(k, v) for k, v in urllib.parse.parse_qsl(p.query, keep_blank_values=True)
+                 if not k.lower().startswith("utm_")]
+    except ValueError:
+        return 0
+    path = urllib.parse.unquote(p.path).rstrip("/")
+    if FORM_LINK.search(u):
+        return 3
+    if not path and not pairs:
+        return 0
+    if re.search(r"\d{3,}|[0-9a-f]{8}-[0-9a-f]{4}|/[A-Za-z_-]*\d+$", path):
+        return 3
+    for k, v in pairs:
+        if NOT_ID_KEY.search(k):
+            continue
+        if re.fullmatch(r"\d{3,}", v) or (re.fullmatch(r"\d+", v) and ID_KEY.search(k)) \
+                or re.match(r"(?:view|read|detail)", v, re.I):
+            return 3
+    if LIST_WORD.search(path + "?" + "&".join(k + "=" + v for k, v in pairs)):
+        return 1
+    if re.fullmatch(r"/(?:index|main|home|default)(?:\.\w+)?", path, re.I) and not pairs:
+        return 0
+    return 2
 
 
 def item(src, title, url, host="", cats="", target="", start=None, end=None,
@@ -692,6 +732,98 @@ def body_text(src, t):
     return clean(seg)
 
 
+BODY_SRCS = ("씽굿", "콘테스트코리아", "링커리어", "위비티", "소통24")
+LINK_SKIP = re.compile(r"kakao|facebook\.com|instagram\.com|youtube\.com|youtu\.be|twitter\.com|//x\.com|apple\.com|"
+                       r"play\.google|googletagmanager|w3\.org|share\.naver|mois\.go\.kr/html|modu\.go\.kr|korea\.kr|"
+                       r"media-cdn|\.(?:jpe?g|png|gif|bmp|svg|pdf|hwpx?|zip|docx?|xlsx?|pptx?|js|css)(?:$|\?)", re.I)
+
+
+def body_link(src, t):
+    """'홈페이지' 칸이 빈 공고 — 공고 본문에 적힌 바깥 주소 가운데 하나를 고른다. 없으면 빈 글.
+    주최 측 화면 주소를 신청서(구글 폼 등)보다 앞세우고, 그 안에서는 더 구체적인 주소를 고른다."""
+    if src == "소통24":
+        m = re.search(r'property="og:description"\s+content="([^"]*)"', t)
+        seg = html.unescape(html.unescape(m.group(1))) if m else ""
+    else:
+        start, stop = BODY_CUT[src]
+        i = t.find(start)
+        if i < 0:
+            return ""
+        j = t.find(stop, i)
+        seg = html.unescape(t[i:j if j > 0 else i + 80000])
+    best, rank = "", None
+    for n, raw in enumerate(re.findall(r"https?://[^\s\"'<>()\[\]\\]+", seg)):
+        u = host_url(raw.rstrip(".,;:!?·"))
+        if not u or LINK_SKIP.search(u):
+            continue
+        r = (0 if FORM_LINK.search(u) else 1, spec(u), -n)
+        if rank is None or r > rank:
+            best, rank = u, r
+    return best
+
+
+# ───────────────────────── 목록·대문 주소에서 공고 글 찾기 ─────────────────────────
+# 주최 측 주소가 공지사항 목록이나 대문이면, 그 화면을 한 번 열어 제목이 같은 글의 링크를 찾는다.
+# 찾은 주소(없으면 빈 글)는 _기록.json 의 post 에 적어 두고 다시 열지 않는다. 못 연 곳은 한 번만 더 해 본다.
+
+POST_CAP = 400
+SSL_LOOSE = ssl._create_unverified_context()      # 인증서가 낡은 기관 사이트도 읽기만 한다
+
+
+def find_post(home, title):
+    req = urllib.request.Request(home, headers={"User-Agent": UA, "Accept-Language": "ko-KR,ko;q=0.9"})
+    with urllib.request.urlopen(req, timeout=15, context=SSL_LOOSE) as r:
+        raw, base = r.read(1500000), r.geturl()
+    try:
+        t = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        t = raw.decode("cp949", "replace")
+    key, best, score = norm(title), "", 0.0
+    site = re.sub(r"^www\.", "", urllib.parse.urlsplit(base).netloc.lower())      # 같은 사이트 안의 글만 받는다
+    for m in re.finditer(r"<a\b([^>]*)>(.*?)</a>", t, re.S | re.I):
+        href = re.search(r'href\s*=\s*["\']([^"\']+)["\']', m.group(1), re.I)
+        if not href or re.match(r"\s*(?:javascript:|#|mailto:|tel:)", href.group(1), re.I):
+            continue
+        tip = re.search(r'title\s*=\s*["\']([^"\']+)["\']', m.group(1), re.I)
+        for label in (m.group(2), tip.group(1) if tip else ""):
+            name = norm(clean(label))
+            if len(name) < 6:
+                continue
+            if key in name or (name in key and len(name) >= max(8, 0.6 * len(key))):
+                sc = 1.0
+            else:
+                sc = difflib.SequenceMatcher(None, key, name).ratio()
+            if sc > score and sc >= 0.8:
+                u = host_url(urllib.parse.urljoin(base, html.unescape(href.group(1).strip())))
+                # 첨부파일·신청서·SNS 가 아니고, 지금 주소보다 구체적인 화면이어야 한다
+                if u and not FILE_LINK.search(u) and not FORM_LINK.search(u) and not LINK_SKIP.search(u) \
+                        and spec(u) >= 2 and spec(u) > spec(home) \
+                        and re.sub(r"^www\.", "", urllib.parse.urlsplit(u).netloc.lower()) == site:
+                    best, score = u, sc
+    return best
+
+
+def fetch_posts(want, posts):
+    """want = [(주최 측 주소, 제목)…]. 사이트가 제각각이라 여럿을 나란히 연다."""
+    jobs = list(dict.fromkeys(want))[:POST_CAP]
+
+    def work(job):
+        home, title = job
+        try:
+            return find_post(home, title)
+        except Exception:
+            return None
+
+    if jobs:
+        with cf.ThreadPoolExecutor(max_workers=12) as pool:
+            for (home, title), got in zip(jobs, pool.map(work, jobs)):
+                k = home + " " + norm(title)
+                if got is None:
+                    got = "" if posts.get(k) == "!" else "!"      # 못 열었음 — 한 번만 더 해 본다
+                posts[k] = got
+    return len(jobs)
+
+
 def ai_note(text):
     """AI 사용을 허용한다고 적은 문장을 찾아 한 줄(110자까지)로 돌려준다. 없으면 빈 글."""
     for clause in re.split(r"¶|(?<=[.!?。])\s+|\s[-–•⦁●■□○◦※▶▷◆◇*]\s?", text):
@@ -712,7 +844,7 @@ def ai_note(text):
     return ""
 
 
-def fetch_details(todo, homes, ais):
+def fetch_details(todo, homes, ais, bodies):
     """todo = [(사이트, 상세 화면 주소)…]. 사이트마다 차례로(사이트끼리는 나란히) 한 번씩 열어
     주최 측 주소는 homes 에, AI 사용 가능 문장은 ais 에 적는다."""
     by_src = {}
@@ -720,7 +852,7 @@ def fetch_details(todo, homes, ais):
         by_src.setdefault(src, []).append(url)
 
     def work(src):
-        s, h, a, bad = Session(), {}, {}, 0
+        s, h, a, b, bad = Session(), {}, {}, {}, 0
         for url in by_src[src][:DETAIL_CAP]:
             try:
                 t = s.text(url)
@@ -728,20 +860,23 @@ def fetch_details(todo, homes, ais):
                     h[url] = home_from_page(src, t)
                 if src in AI_SRCS and url not in ais:
                     a[url] = ai_note(body_text(src, t))
+                if src in BODY_SRCS and url not in bodies:
+                    b[url] = body_link(src, t)
                 bad = 0
             except Exception:
                 bad += 1                       # 못 연 것은 적지 않는다 — 다음 실행 때 다시 해 본다
                 if bad >= 5:
                     break                      # 잇달아 막히면 그 사이트는 이번엔 그만둔다
-        return h, a, len(by_src[src][:DETAIL_CAP])
+        return h, a, b, len(by_src[src][:DETAIL_CAP])
 
     done = 0
     if by_src:
         with cf.ThreadPoolExecutor(max_workers=len(by_src)) as pool:
             results = list(pool.map(work, list(by_src)))
-        for h, a, n in results:
+        for h, a, b, n in results:
             homes.update(h)
             ais.update(a)
+            bodies.update(b)
             done += n
     return done
 
@@ -759,10 +894,11 @@ def guess_posted(nums, table):
     return None
 
 
-def merge(rows_by_src, first_seen, first_run, homes, ais):
+def merge(rows_by_src, first_seen, first_run, homes, ais, bodies, posts):
     """homes = {상세 화면 주소: 주최 측 주소 또는 빈 글}, ais = {상세 화면 주소: AI 사용 가능 문장 또는 빈 글}.
-    돌려주는 todo 는 아직 열어 보지 않은 상세 화면들."""
-    merged, order, todo = {}, [], []
+    bodies = {상세 화면 주소: 본문 속 바깥 주소}, posts = {주최 측 주소 + 제목: 그 화면에서 찾은 공고 글 주소}.
+    돌려주는 todo 는 아직 열어 보지 않은 상세 화면들, want 는 공고 글을 찾아볼 (목록·대문 주소, 제목)들."""
+    merged, order, todo, want = {}, [], [], []
     for name, _, _ in SOURCES:
         for r in rows_by_src.get(name, []):
             end = r.get("end")
@@ -774,7 +910,7 @@ def merge(rows_by_src, first_seen, first_run, homes, ais):
             m = merged.get(key)
             if m is None:
                 m = {"t": r["title"], "s": None, "e": None, "l": [], "hosts": [], "cats": [], "who": [],
-                     "notes": [], "horgs": [], "posted": [], "nums": {}, "home": ""}
+                     "notes": [], "horgs": [], "posted": [], "nums": {}, "homes": []}
                 merged[key] = m
                 order.append(key)
             m["s"] = m["s"] or r.get("start")          # 겹치는 공모전 — 비어 있는 칸만 채운다
@@ -785,7 +921,8 @@ def merge(rows_by_src, first_seen, first_run, homes, ais):
                     m[box].append(r[field])
             if r.get("num"):
                 m["nums"].setdefault(name, r["num"])
-            m["home"] = m["home"] or r.get("home", "")
+            if r.get("home") and r["home"] not in m["homes"]:
+                m["homes"].append(r["home"])
             if not any(src == name for src, _ in m["l"]):
                 m["l"].append([name, r["url"]])
 
@@ -810,19 +947,32 @@ def merge(rows_by_src, first_seen, first_run, homes, ais):
                "l": m["l"], "p": 1 if is_public(srcs, m["horgs"], m["hosts"]) else 0,
                "w": who_tokens(target, title)}
 
-        # 주최 측 사이트 주소: 목록에 실려 온 것 → 열어 본 상세 화면에서 찾은 것. 없으면 다음에 열어 볼 것으로 적는다
-        home = m["home"]
-        if not home:
-            for src in DETAIL_ORDER:
-                url = next((u for s2, u in m["l"] if s2 == src), None)
-                if not url:
+        # 주최 측 사이트 주소: 여러 사이트가 알려 준 주소(목록에 실려 온 것 + 상세 화면 '홈페이지' 칸)를 모두 모아
+        # 가장 구체적인 것(공고 글 > 하위 화면 > 게시판 목록 > 대문)을 고른다. 하나도 없으면 공고 본문 속 주소를 쓴다.
+        cands = list(m["homes"])
+        for src in DETAIL_ORDER:
+            for s2, url in m["l"]:
+                if s2 != src:
                     continue
                 if url not in homes:
                     todo.append((src, url))
-                    break
-                if homes[url]:
-                    home = homes[url]
-                    break
+                elif homes[url] and homes[url] not in cands:
+                    cands.append(homes[url])
+        if not cands:
+            for src, url in m["l"]:
+                if src not in BODY_SRCS:
+                    continue
+                if url not in bodies:
+                    todo.append((src, url))
+                elif bodies[url] and bodies[url] not in cands:
+                    cands.append(bodies[url])
+        home = max(cands, key=spec) if cands else ""       # 같은 등급이면 앞에 있는 것
+        if home and spec(home) <= 1:                        # 목록·대문이면 그 화면에서 이 공모전 글을 찾아본다
+            k = home + " " + key
+            if posts.get(k, "!") == "!":
+                want.append((home, title))
+            if posts.get(k) not in (None, "", "!"):
+                home = posts[k]
         if home:
             row["u"] = home
 
@@ -870,7 +1020,7 @@ def merge(rows_by_src, first_seen, first_run, homes, ais):
         if q:
             row["q"] = q
         items.append(row)
-    return items, seen_now, todo
+    return items, seen_now, todo, want
 
 
 def write_synced(path, text):
@@ -946,12 +1096,23 @@ def main(argv):
         report.append(done[name])
 
     homes, ais = state.get("home", {}), state.get("ai", {})
-    items, seen_now, todo = merge(rows_by_src, state.get("first_seen", {}), first_run, homes, ais)
-    if todo and not render_only and "--no-detail" not in argv:
+    bodies, posts = state.get("body", {}), state.get("post", {})
+    args = (rows_by_src, state.get("first_seen", {}), first_run, homes, ais, bodies, posts)
+    online = not render_only and "--no-detail" not in argv
+    items, seen_now, todo, want = merge(*args)
+    if todo and online:
         t0 = time.time()
-        got = fetch_details(todo, homes, ais)
-        items, seen_now, left = merge(rows_by_src, state.get("first_seen", {}), first_run, homes, ais)
+        got = fetch_details(todo, homes, ais, bodies)
+        items, seen_now, left, want = merge(*args)
         log(f"  상세 화면 {got}건을 열어 봄 ({time.time() - t0:.0f}초) · 아직 안 열어 본 것 {len(set(left))}건")
+    if want and online:
+        t0 = time.time()
+        got = fetch_posts(want, posts)
+        items, seen_now, _, left = merge(*args)
+        log(f"  목록·대문 주소 {got}곳에서 공고 글을 찾아봄 ({time.time() - t0:.0f}초) · 남은 것 {len(set(left))}건")
+    grade = [spec(x["u"]) for x in items if x.get("u")]
+    log(f"  제목 링크: 공고 글·전용 화면 {sum(1 for g in grade if g >= 2)}건 · 게시판 목록 {grade.count(1)}건"
+        f" · 주최 측 대문 {grade.count(0)}건 · 모음 사이트 {len(items) - len(grade)}건")
     log(f"  주최 측 주소를 아는 것 {sum(1 for x in items if x.get('u'))}건 / 모르는 것 {sum(1 for x in items if not x.get('u'))}건"
         f" / AI 사용 가능 표기 {sum(1 for x in items if x.get('ai'))}건")
     pub = sum(1 for x in items if x["p"])
@@ -980,7 +1141,11 @@ def main(argv):
         live = {u for rows in rows_by_src.values() for u in (r["url"] for r in rows)}
         homes = {k: v for k, v in homes.items() if k in live}
         ais = {k: v for k, v in ais.items() if k in live}
-    write_synced(STATE, json.dumps({"last_run": now, "first_seen": seen_now, "home": homes, "ai": ais, "sources": cache},
+        bodies = {k: v for k, v in bodies.items() if k in live}
+        known = set(homes.values()) | set(bodies.values()) | {r.get("home") for rows in rows_by_src.values() for r in rows}
+        posts = {k: v for k, v in posts.items() if k.rsplit(" ", 1)[0] in known}
+    write_synced(STATE, json.dumps({"last_run": now, "first_seen": seen_now, "home": homes, "ai": ais, "body": bodies, "post": posts,
+                                        "sources": cache},
                                    ensure_ascii=False, separators=(",", ":")))
     log(f"완료 — 겹친 것을 합쳐 {len(items)}건, {os.path.basename(OUT)} 갱신")
     return 0
