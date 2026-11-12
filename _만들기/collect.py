@@ -157,7 +157,7 @@ def spec(u):
     for k, v in pairs:
         if NOT_ID_KEY.search(k):
             continue
-        if re.fullmatch(r"\d{3,}", v) or (re.fullmatch(r"\d+", v) and ID_KEY.search(k)) \
+        if re.fullmatch(r"\d{3,}", v) or (re.fullmatch(r"\d+|[A-Za-z_-]*\d{4,}", v) and ID_KEY.search(k)) \
                 or re.match(r"(?:view|read|detail)", v, re.I):
             return 3
     if LIST_WORD.search(path + "?" + "&".join(k + "=" + v for k, v in pairs)):
@@ -770,8 +770,65 @@ POST_CAP = 400
 SSL_LOOSE = ssl._create_unverified_context()      # 인증서가 낡은 기관 사이트도 읽기만 한다
 
 
+POST_V = 2              # 글 찾는 방법이 바뀌면 올린다 — 예전 방법으로 못 찾은 곳을 다시 찾아본다
+POST_MIN = 0.6          # 이 점수부터 '같은 공모전의 글'로 본다
+# 어느 공모전 글에나 나오는 말 — 견줄 때는 빼고, 그 공모전에만 있는 말끼리 견준다
+COMMON_WORD = re.compile(r"공모전|경진대회|콘테스트|공모|대회|챌린지|모집|안내|공고|공지사항|공지|참가자|참가팀|참가|개최|접수|신청|"
+                         r"필독|contest|20\d\d년?도?|제?\d+[회기차]")
+YEAR = re.compile(r"(20\d\d)(?![.\-/]\s?\d)")           # '2026-10-12' 같은 올린 날짜는 연도로 치지 않는다
+ROUND = re.compile(r"제\s?(\d+)\s?[회기]|(\d+)(?:st|nd|rd|th)\b", re.I)
+
+
+def core(name):
+    return COMMON_WORD.sub("", name)
+
+
+def alike(key, name, cut=False):
+    """공모전 제목(key)과 링크 글자(name)가 얼마나 같은 공모전을 가리키는가(0~1). 둘 다 norm 을 거친 글.
+    글자가 똑같지 않아도 된다 — 게시판에서 '…'로 잘린 제목, 주최 기관 이름이 덧붙은 제목, 날짜가 딸린 제목을 받아 준다."""
+    if key in name or (name in key and len(name) >= max(8, 0.6 * len(key))):
+        return 1.0
+    kc, nc = core(key), core(name)
+    if len(kc) < 4 or len(nc) < 4:
+        return 0.0
+    if kc in nc:
+        return 0.95
+    if nc in kc and len(nc) >= max(6, 0.6 * len(kc)):
+        return 0.95
+    if cut and kc.startswith(nc) and len(nc) >= 6:          # 게시판이 제목 뒤쪽을 '…'로 자른 것
+        return 0.9
+    blocks = [b.size for b in difflib.SequenceMatcher(None, kc, nc, autojunk=False).get_matching_blocks() if b.size >= 2]
+    same = sum(blocks)
+    score = 2 * same / (len(kc) + len(nc))
+    if blocks and max(blocks) >= max(6, 0.4 * len(kc)):     # 길게 이어진 같은 말이 있다(뒤에 날짜·기간이 붙은 긴 글자)
+        score = max(score, 0.75)
+    return score
+
+
+def other_edition(title, label):
+    """연도나 회차가 서로 다르면 지난 회 공고다."""
+    for rx in (YEAR, ROUND):
+        a = {"".join(x) for x in rx.findall(title)}
+        b = {"".join(x) for x in rx.findall(label)}
+        if a and b and not a & b:
+            return True
+    return False
+
+
+def idn(u):
+    """한글 도메인(https://청소년창작영상제.com)은 퓨니코드로 바꿔야 열린다."""
+    try:
+        p = urllib.parse.urlsplit(u)
+        if p.netloc.isascii():
+            return u
+        host = p.hostname.encode("idna").decode("ascii") + (f":{p.port}" if p.port else "")
+        return urllib.parse.urlunsplit((p.scheme, host, urllib.parse.quote(p.path, safe="/%"), p.query, p.fragment))
+    except (ValueError, UnicodeError):
+        return u
+
+
 def find_post(home, title):
-    req = urllib.request.Request(home, headers={"User-Agent": UA, "Accept-Language": "ko-KR,ko;q=0.9"})
+    req = urllib.request.Request(idn(home), headers={"User-Agent": UA, "Accept-Language": "ko-KR,ko;q=0.9"})
     with urllib.request.urlopen(req, timeout=15, context=SSL_LOOSE) as r:
         raw, base = r.read(1500000), r.geturl()
     try:
@@ -786,14 +843,12 @@ def find_post(home, title):
             continue
         tip = re.search(r'title\s*=\s*["\']([^"\']+)["\']', m.group(1), re.I)
         for label in (m.group(2), tip.group(1) if tip else ""):
-            name = norm(clean(label))
-            if len(name) < 6:
+            text = clean(label)
+            name = norm(text)
+            if len(name) < 6 or len(name) > 200:
                 continue
-            if key in name or (name in key and len(name) >= max(8, 0.6 * len(key))):
-                sc = 1.0
-            else:
-                sc = difflib.SequenceMatcher(None, key, name).ratio()
-            if sc > score and sc >= 0.8:
+            sc = alike(key, name, bool(re.search(r"(?:…|\.{2,})\s*(?:\(\d+\))?\s*$", text)))
+            if sc > score and sc >= POST_MIN and not other_edition(title, text):
                 u = host_url(urllib.parse.urljoin(base, html.unescape(href.group(1).strip())))
                 # 첨부파일·신청서·SNS 가 아니고, 지금 주소보다 구체적인 화면이어야 한다
                 if u and not FILE_LINK.search(u) and not FORM_LINK.search(u) and not LINK_SKIP.search(u) \
@@ -1097,6 +1152,8 @@ def main(argv):
 
     homes, ais = state.get("home", {}), state.get("ai", {})
     bodies, posts = state.get("body", {}), state.get("post", {})
+    if state.get("post_v") != POST_V:           # 찾는 방법이 바뀌었으니, 못 찾았던 곳은 다시 찾아본다
+        posts = {k: v for k, v in posts.items() if v not in ("", "!")}
     args = (rows_by_src, state.get("first_seen", {}), first_run, homes, ais, bodies, posts)
     online = not render_only and "--no-detail" not in argv
     items, seen_now, todo, want = merge(*args)
@@ -1144,7 +1201,7 @@ def main(argv):
         bodies = {k: v for k, v in bodies.items() if k in live}
         known = set(homes.values()) | set(bodies.values()) | {r.get("home") for rows in rows_by_src.values() for r in rows}
         posts = {k: v for k, v in posts.items() if k.rsplit(" ", 1)[0] in known}
-    write_synced(STATE, json.dumps({"last_run": now, "first_seen": seen_now, "home": homes, "ai": ais, "body": bodies, "post": posts,
+    write_synced(STATE, json.dumps({"last_run": now, "first_seen": seen_now, "home": homes, "ai": ais, "body": bodies, "post": posts, "post_v": POST_V,
                                         "sources": cache},
                                    ensure_ascii=False, separators=(",", ":")))
     log(f"완료 — 겹친 것을 합쳐 {len(items)}건, {os.path.basename(OUT)} 갱신")
